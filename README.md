@@ -1,6 +1,7 @@
 # Elm Template (using [Vite](https://vitejs.dev/) and [Tailwindcss](https://tailwindcss.com/))
 
 Template repository for Elm + Tailwind CSS.
+Most of the code is copied from [lindsaykwardell/vite-elm-template](https://github.com/lindsaykwardell/vite-elm-template)
 
 ## Requirements
 
