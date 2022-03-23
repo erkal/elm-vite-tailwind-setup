@@ -8,10 +8,11 @@ import Html.Events exposing (..)
 
 main : Program () Int Msg
 main =
-    Browser.sandbox
-        { init = 0
+    Browser.element
+        { init = always ( 0, Cmd.none )
         , update = update
         , view = view
+        , subscriptions = always Sub.none
         }
 
 
@@ -20,14 +21,18 @@ type Msg
     | Increment
 
 
-update : Msg -> number -> number
+type alias Model =
+    Int
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Decrement ->
-            model - 1
+            ( model - 1, Cmd.none )
 
         Increment ->
-            model + 1
+            ( model + 1, Cmd.none )
 
 
 view : Int -> Html Msg
