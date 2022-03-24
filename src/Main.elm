@@ -1,87 +1,239 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, a, button, code, div, h1, hr, img, p, span, text)
-import Html.Attributes exposing (class, href, src, style)
+import Browser.Events
+import Geometry exposing (Point)
+import Html exposing (Html, div)
+import Html.Attributes exposing (style)
 import Html.Events exposing (..)
+import Json.Decode as JD
+import Svg exposing (circle, svg)
+import Svg.Attributes as SA exposing (cx, cy, fill, r)
 
 
-main : Program () Int Msg
+main : Program () Model Msg
 main =
     Browser.element
-        { init = always ( 0, Cmd.none )
+        { init = init
         , update = update
         , view = view
-        , subscriptions = always Sub.none
+        , subscriptions = subscriptions
         }
 
 
 type Msg
-    = Decrement
-    | Increment
+    = WheelDeltaY Int
+    | MouseMove MousePosition
+    | MouseDownOnCanvas
+    | MouseUp
 
 
 type alias Model =
-    Int
+    { state : State
+    , pan :
+        -- svg coordinates of the top left corner of the browser window
+        Point
+    , zoom : Float
+    , mousePosition : MousePosition
+    , svgMousePosition : Point
+    }
+
+
+type State
+    = Idle
+    | Panning
+        { mousePositionAtPanStart : MousePosition
+        , panAtStart : Point
+        }
+
+
+init : () -> ( Model, Cmd Msg )
+init () =
+    ( { state = Idle
+      , pan = { x = 0, y = 0 }
+      , zoom = 1
+      , mousePosition = { x = 0, y = 0 }
+      , svgMousePosition = { x = 0, y = 0 }
+      }
+    , Cmd.none
+    )
+
+
+type alias MousePosition =
+    { x : Int, y : Int }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ Browser.Events.onMouseMove
+            (JD.map MouseMove (JD.map2 MousePosition (JD.field "clientX" JD.int) (JD.field "clientY" JD.int)))
+        , Browser.Events.onMouseUp
+            (JD.succeed MouseUp)
+        ]
+
+
+minZoom =
+    0.5
+
+
+maxZoom =
+    2
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Decrement ->
-            ( model - 1, Cmd.none )
+        WheelDeltaY deltaY ->
+            let
+                newZoom =
+                    (model.zoom + 0.001 * toFloat -deltaY)
+                        |> clamp minZoom maxZoom
+            in
+            ( { model
+                | zoom = newZoom
+                , pan = model.pan |> Geometry.scaleAbout model.svgMousePosition (model.zoom / newZoom)
+              }
+            , Cmd.none
+            )
 
-        Increment ->
-            ( model + 1, Cmd.none )
+        MouseDownOnCanvas ->
+            ( { model
+                | state =
+                    Panning
+                        { mousePositionAtPanStart = model.mousePosition
+                        , panAtStart = model.pan
+                        }
+              }
+            , Cmd.none
+            )
+
+        MouseMove newMousePosition ->
+            ( { model
+                | mousePosition = newMousePosition
+                , svgMousePosition =
+                    { x = toFloat newMousePosition.x
+                    , y = toFloat newMousePosition.y
+                    }
+                        |> Geometry.scaleAbout { x = 0, y = 0 } (1 / model.zoom)
+                        |> Geometry.translateBy ( model.pan.x, model.pan.y )
+                , pan =
+                    case model.state of
+                        Idle ->
+                            model.pan
+
+                        Panning { mousePositionAtPanStart, panAtStart } ->
+                            let
+                                toPoint : MousePosition -> Point
+                                toPoint pos =
+                                    { x = toFloat pos.x
+                                    , y = toFloat pos.y
+                                    }
+
+                                delta =
+                                    Geometry.vectorFrom (toPoint newMousePosition) (toPoint mousePositionAtPanStart)
+                                        |> Geometry.scaleBy (1 / model.zoom)
+                            in
+                            panAtStart |> Geometry.translateBy delta
+              }
+            , Cmd.none
+            )
+
+        MouseUp ->
+            ( { model | state = Idle }
+            , Cmd.none
+            )
 
 
-view : Int -> Html Msg
+view : Model -> Html Msg
 view model =
+    div []
+        [ viewCanvas model ]
+
+
+viewCanvas : Model -> Html Msg
+viewCanvas model =
     div
-        [ class "flex justify-center" ]
-        [ div [ class "bg-gray-300 p-10 space-y-4 rounded-lg" ]
-            [ img
-                [ src "/logo.png"
-                , class "object-contain h-48 w-96"
-                ]
-                []
-            , h1
-                [ class "text-3xl font-bold"
-                ]
-                [ text "Elm + Vite + Tailwind CSS!" ]
-            , div []
-                [ a
-                    [ href "https://guide.elm-lang.org/"
-                    , class "underline text-sky-600 decoration-2 hover:decoration-4"
-                    ]
-                    [ text "Elm Documentation" ]
-                ]
-            , div []
-                [ a
-                    [ href "https://vitejs.dev/guide/features.html"
-                    , class "underline text-sky-600 decoration-2 hover:decoration-4"
-                    ]
-                    [ text "Vite Documentation" ]
-                ]
-            , div []
-                [ a
-                    [ href "https://tailwindcss.com/docs/installation"
-                    , class "underline text-sky-600 decoration-2 hover:decoration-4"
-                    ]
-                    [ text "Tailwind CSS Documentation" ]
-                ]
-            , hr [] []
-            , p [ class "flex justify-center flex-row space-x-2" ]
-                [ button [ onClick Decrement, class "px-2 rounded-md bg-sky-600 hover:bg-sky-700 text-white" ] [ text "-" ]
-                , div [ class "flex-none w-8 text-center" ] [ text (String.fromInt model) ]
-                , button [ onClick Increment, class "px-2 rounded-md bg-sky-600 hover:bg-sky-700 text-white" ] [ text "+" ]
-                ]
-            , hr [] []
-            , p
-                []
-                [ text "Edit "
-                , code [] [ text "src/Main.elm" ]
-                , text " to test auto refresh"
-                ]
-            ]
+        [ style "width" (String.fromInt canvasWidthInPixels ++ "px")
+        , style "height" (String.fromInt canvasHeightInPixels ++ "px")
+        , style "background-color" "lightgray"
+        , style "overflow" "hidden"
+        , Html.Events.onMouseDown MouseDownOnCanvas
+        , Html.Events.on "wheel" (JD.map WheelDeltaY (JD.field "deltaY" JD.int))
+        ]
+        [ htmlCanvas model
+        , svgCanvas model
+        ]
+
+
+htmlCanvas : Model -> Html Msg
+htmlCanvas model =
+    div
+        [ style "position" "absolute"
+        , style "transform" (panAndZoomToDivTransform model.pan model.zoom)
+        ]
+        [ viewNode model ]
+
+
+viewNode : Model -> Html Msg
+viewNode model =
+    div
+        [ style "position" "absolute"
+        , style "top" "60px"
+        , style "left" "60px"
+        , style "width" "200px"
+        , style "height" "100px"
+        , style "background-color" "red"
+        , style "opacity" "0.8"
+        ]
+        []
+
+
+panAndZoomToDivTransform : Point -> Float -> String
+panAndZoomToDivTransform pan zoom =
+    let
+        ( translateX, translateY ) =
+            ( String.fromFloat -(pan.x * zoom)
+            , String.fromFloat -(pan.y * zoom)
+            )
+    in
+    "translate("
+        ++ translateX
+        ++ "px, "
+        ++ translateY
+        ++ "px) "
+        ++ "scale("
+        ++ String.fromFloat zoom
+        ++ ")"
+
+
+panAndZoomToSvgViewBox : Point -> Float -> String
+panAndZoomToSvgViewBox pan zoom =
+    [ pan.x
+    , pan.y
+    , toFloat canvasWidthInPixels / zoom
+    , toFloat canvasHeightInPixels / zoom
+    ]
+        |> List.map String.fromFloat
+        |> List.intersperse " "
+        |> String.concat
+
+
+canvasWidthInPixels =
+    1200
+
+
+canvasHeightInPixels =
+    600
+
+
+svgCanvas : Model -> Html Msg
+svgCanvas model =
+    svg
+        [ SA.width (String.fromInt canvasWidthInPixels)
+        , SA.height (String.fromInt canvasHeightInPixels)
+        , SA.viewBox (panAndZoomToSvgViewBox model.pan model.zoom)
+        ]
+        [ circle [ cx "200", cy "200", r "10", fill "yellow" ] []
+        , circle [ cx "240", cy "210", r "10", fill "yellow" ] []
         ]
