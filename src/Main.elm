@@ -76,11 +76,11 @@ subscriptions model =
 
 
 minZoom =
-    0.5
+    0.25
 
 
 maxZoom =
-    2
+    1
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -89,7 +89,7 @@ update msg model =
         WheelDeltaY deltaY ->
             let
                 newZoom =
-                    (model.zoom + 0.001 * toFloat -deltaY)
+                    (model.zoom + 0.0005 * toFloat -deltaY)
                         |> clamp minZoom maxZoom
             in
             ( { model
@@ -194,7 +194,7 @@ viewNode nodeId node =
         , style "opacity" "0.6"
         , style "padding" "10px"
         ]
-        [ text "I am a div"
+        [ text "Html"
         ]
 
 
@@ -243,6 +243,6 @@ svgCanvas model =
         , SA.height (String.fromInt canvasHeightInPixels)
         , SA.viewBox (panAndZoomToSvgViewBox model.pan model.zoom)
         ]
-        [ circle [ cx "200", cy "200", r "10", fill "yellow" ] []
-        , circle [ cx "240", cy "210", r "10", fill "yellow" ] []
+        [ circle [ cx "200", cy "300", r "10", fill "steelblue" ] []
+        , circle [ cx "240", cy "310", r "20", fill "steelblue" ] []
         ]
