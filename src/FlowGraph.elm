@@ -2,6 +2,8 @@ module FlowGraph exposing (..)
 
 import Dict exposing (Dict)
 import Geometry exposing (Point)
+import Html exposing (Html, div)
+import Html.Attributes exposing (style)
 
 
 type alias FlowGraph n e =
@@ -26,10 +28,6 @@ type alias Node n e =
 type alias Edge e =
     { edgeData : e
     , target : NodeId
-
-    --
-    , yCoordinateOnSource : Float
-    , yCoordinateOnTarget : Float
     }
 
 
@@ -50,10 +48,6 @@ exampleGraph =
                             (\target ->
                                 { edgeData = ()
                                 , target = target
-
-                                --
-                                , yCoordinateOnSource = 30
-                                , yCoordinateOnTarget = 30
                                 }
                             )
 
@@ -65,7 +59,7 @@ exampleGraph =
             )
     in
     Dict.fromList
-        [ makeNode { x = 100, y = 300 } 0 [ 1, 2 ]
-        , makeNode { x = 500, y = 600 } 1 [ 2 ]
-        , makeNode { x = 800, y = 500 } 2 []
+        [ makeNode { x = 100, y = 100 } 0 [ 1, 2 ]
+        , makeNode { x = 500, y = 400 } 1 [ 2 ]
+        , makeNode { x = 800, y = 300 } 2 []
         ]

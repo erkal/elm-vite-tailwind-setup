@@ -2,8 +2,10 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events
+import Dict
+import FlowGraph exposing (Node, NodeId)
 import Geometry exposing (Point)
-import Html exposing (Html, div)
+import Html exposing (Html, div, text)
 import Html.Attributes exposing (style)
 import Html.Events exposing (..)
 import Json.Decode as JD
@@ -172,21 +174,28 @@ htmlCanvas model =
         [ style "position" "absolute"
         , style "transform" (panAndZoomToDivTransform model.pan model.zoom)
         ]
-        [ viewNode model ]
+        (FlowGraph.exampleGraph |> Dict.map viewNode |> Dict.values)
 
 
-viewNode : Model -> Html Msg
-viewNode model =
+viewNode : NodeId -> Node () () -> Html msg
+viewNode nodeId node =
     div
         [ style "position" "absolute"
-        , style "top" "60px"
-        , style "left" "60px"
+        , style "transform"
+            ("translate("
+                ++ String.fromFloat node.position.x
+                ++ "px,"
+                ++ String.fromFloat node.position.y
+                ++ "px)"
+            )
         , style "width" "200px"
         , style "height" "100px"
         , style "background-color" "red"
-        , style "opacity" "0.8"
+        , style "opacity" "0.6"
+        , style "padding" "10px"
         ]
-        []
+        [ text "I am a div"
+        ]
 
 
 panAndZoomToDivTransform : Point -> Float -> String
