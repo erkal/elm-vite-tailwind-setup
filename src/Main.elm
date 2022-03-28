@@ -3,14 +3,14 @@ module Main exposing (main)
 import Browser
 import Browser.Events
 import Dict
-import FlowGraph exposing (Node, NodeId)
+import FlowGraph exposing (FlowGraph, Node, NodeId)
 import Geometry exposing (Point)
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (style)
 import Html.Events exposing (..)
 import Json.Decode as JD
-import Svg exposing (circle, svg)
-import Svg.Attributes as SA exposing (cx, cy, fill, r)
+import Svg exposing (circle, rect, svg)
+import Svg.Attributes as SA exposing (cx, cy, fill, height, r, width)
 
 
 main : Program () Model Msg
@@ -26,12 +26,14 @@ main =
 type Msg
     = WheelDeltaY Int
     | MouseMove MousePosition
-    | MouseDownOnCanvas
+    | MouseDownOnBackgroundRectangle
+    | MouseDownOnNode NodeId Point
     | MouseUp
 
 
 type alias Model =
-    { state : State
+    { flowGraph : FlowGraph () ()
+    , state : State
     , pan :
         -- svg coordinates of the top left corner of the browser window
         Point
@@ -47,11 +49,17 @@ type State
         { mousePositionAtPanStart : MousePosition
         , panAtStart : Point
         }
+    | DraggingNode
+        { nodeId : NodeId
+        , brushStart : Point
+        , nodePositionAtStart : Point
+        }
 
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( { state = Idle
+    ( { flowGraph = FlowGraph.exampleGraph
+      , state = Idle
       , pan = { x = 0, y = 0 }
       , zoom = 1
       , mousePosition = { x = 0, y = 0 }
@@ -99,12 +107,24 @@ update msg model =
             , Cmd.none
             )
 
-        MouseDownOnCanvas ->
+        MouseDownOnBackgroundRectangle ->
             ( { model
                 | state =
                     Panning
                         { mousePositionAtPanStart = model.mousePosition
                         , panAtStart = model.pan
+                        }
+              }
+            , Cmd.none
+            )
+
+        MouseDownOnNode nodeId nodePositionAtStart ->
+            ( { model
+                | state =
+                    DraggingNode
+                        { nodeId = nodeId
+                        , brushStart = model.svgMousePosition
+                        , nodePositionAtStart = nodePositionAtStart
                         }
               }
             , Cmd.none
@@ -119,11 +139,20 @@ update msg model =
                     }
                         |> Geometry.scaleAbout { x = 0, y = 0 } (1 / model.zoom)
                         |> Geometry.translateBy ( model.pan.x, model.pan.y )
+                , flowGraph =
+                    case model.state of
+                        DraggingNode { nodeId, brushStart, nodePositionAtStart } ->
+                            model.flowGraph
+                                |> FlowGraph.moveNode nodeId
+                                    (nodePositionAtStart
+                                        |> Geometry.translateBy
+                                            (Geometry.vectorFrom brushStart model.svgMousePosition)
+                                    )
+
+                        _ ->
+                            model.flowGraph
                 , pan =
                     case model.state of
-                        Idle ->
-                            model.pan
-
                         Panning { mousePositionAtPanStart, panAtStart } ->
                             let
                                 toPoint : MousePosition -> Point
@@ -137,6 +166,9 @@ update msg model =
                                         |> Geometry.scaleBy (1 / model.zoom)
                             in
                             panAtStart |> Geometry.translateBy delta
+
+                        _ ->
+                            model.pan
               }
             , Cmd.none
             )
@@ -160,7 +192,6 @@ viewCanvas model =
         , style "height" (String.fromInt canvasHeightInPixels ++ "px")
         , style "background-color" "lightgray"
         , style "overflow" "hidden"
-        , Html.Events.onMouseDown MouseDownOnCanvas
         , Html.Events.on "wheel" (JD.map WheelDeltaY (JD.field "deltaY" JD.int))
         ]
         [ htmlCanvas model
@@ -174,10 +205,10 @@ htmlCanvas model =
         [ style "position" "absolute"
         , style "transform" (panAndZoomToDivTransform model.pan model.zoom)
         ]
-        (FlowGraph.exampleGraph |> Dict.map viewNode |> Dict.values)
+        (model.flowGraph |> Dict.map viewNode |> Dict.values)
 
 
-viewNode : NodeId -> Node () () -> Html msg
+viewNode : NodeId -> Node () () -> Html Msg
 viewNode nodeId node =
     div
         [ style "position" "absolute"
@@ -193,6 +224,7 @@ viewNode nodeId node =
         , style "background-color" "red"
         , style "opacity" "0.6"
         , style "padding" "10px"
+        , Html.Events.onMouseDown (MouseDownOnNode nodeId node.position)
         ]
         [ text "Html"
         ]
@@ -243,6 +275,13 @@ svgCanvas model =
         , SA.height (String.fromInt canvasHeightInPixels)
         , SA.viewBox (panAndZoomToSvgViewBox model.pan model.zoom)
         ]
-        [ circle [ cx "200", cy "300", r "10", fill "steelblue" ] []
+        [ rect
+            [ width "1200"
+            , height "800"
+            , fill "gray"
+            , Html.Events.onMouseDown MouseDownOnBackgroundRectangle
+            ]
+            []
+        , circle [ cx "200", cy "300", r "10", fill "steelblue" ] []
         , circle [ cx "240", cy "310", r "20", fill "steelblue" ] []
         ]

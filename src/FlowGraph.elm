@@ -63,3 +63,9 @@ exampleGraph =
         , makeNode { x = 500, y = 400 } 1 [ 2 ]
         , makeNode { x = 800, y = 300 } 2 []
         ]
+
+
+moveNode : NodeId -> Point -> FlowGraph () () -> FlowGraph () ()
+moveNode nodeId position flowGraph =
+    flowGraph
+        |> Dict.update nodeId (Maybe.map (\node -> { node | position = position }))
