@@ -61,7 +61,7 @@ type State
         , panAtStart : Point
         }
     | DraggingNodes
-        { brushStart : Point
+        { mousePositionAtDragStart : Point
         , nodePositionsAtStart : List ( NodeId, Point )
         }
     | DrawingEdge { sourceId : NodeId }
@@ -192,7 +192,7 @@ update msg model =
                 { model
                     | state =
                         DraggingNodes
-                            { brushStart = model.svgMousePosition
+                            { mousePositionAtDragStart = model.svgMousePosition
                             , nodePositionsAtStart =
                                 (if Set.member nodeId model.selectedNodes then
                                     Set.toList model.selectedNodes
@@ -230,14 +230,14 @@ update msg model =
                         |> Geometry.translateBy ( model.pan.x, model.pan.y )
                 , flowGraph =
                     case model.state of
-                        DraggingNodes { brushStart, nodePositionsAtStart } ->
+                        DraggingNodes { mousePositionAtDragStart, nodePositionsAtStart } ->
                             model.flowGraph
                                 |> FlowGraph.moveNodes
                                     (nodePositionsAtStart
                                         |> List.map
                                             (Tuple.mapSecond
                                                 (Geometry.translateBy
-                                                    (Geometry.vectorFrom brushStart model.svgMousePosition)
+                                                    (Geometry.vectorFrom mousePositionAtDragStart model.svgMousePosition)
                                                 )
                                             )
                                     )
