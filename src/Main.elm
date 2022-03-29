@@ -1,6 +1,7 @@
 module Main exposing (main)
 
 import Browser
+import Browser.Dom as Dom
 import Browser.Events
 import Dict
 import FlowGraph exposing (FlowGraph, Node, NodeId)
@@ -12,6 +13,7 @@ import Json.Decode as JD
 import Set exposing (Set)
 import Svg exposing (Svg, circle, g, path, rect, svg)
 import Svg.Attributes as SA exposing (cx, cy, d, fill, height, r, stroke, strokeWidth, width)
+import Task
 
 
 main : Program () Model Msg
@@ -25,7 +27,9 @@ main =
 
 
 type Msg
-    = WheelDeltaY Int
+    = GotViewport Dom.Viewport
+    | WindowResized Int Int
+    | WheelDeltaY Int
     | MouseMove MousePosition
     | MouseDownOnBackgroundRectangle
     | MouseDownOnNode NodeId Point
@@ -37,6 +41,7 @@ type Msg
 type alias Model =
     { flowGraph : FlowGraph () ()
     , state : State
+    , screenSize : { width : Int, height : Int }
     , pressedKeys : Set String
     , pan :
         -- svg coordinates of the top left corner of the browser window
@@ -65,13 +70,14 @@ init : () -> ( Model, Cmd Msg )
 init () =
     ( { flowGraph = FlowGraph.exampleGraph
       , state = Idle
+      , screenSize = { width = 800, height = 600 }
       , pressedKeys = Set.empty
       , pan = { x = 0, y = 0 }
       , zoom = 1
       , mousePosition = { x = 0, y = 0 }
       , svgMousePosition = { x = 0, y = 0 }
       }
-    , Cmd.none
+    , Task.perform GotViewport Dom.getViewport
     )
 
 
@@ -88,6 +94,7 @@ subscriptions model =
             (JD.succeed MouseUp)
         , Browser.Events.onKeyUp (JD.map (KeyChanged False) (JD.field "key" JD.string))
         , Browser.Events.onKeyDown (JD.map (KeyChanged True) (JD.field "key" JD.string))
+        , Browser.Events.onResize WindowResized
         ]
 
 
@@ -102,6 +109,20 @@ maxZoom =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        GotViewport { viewport } ->
+            ( { model
+                | screenSize = { width = round viewport.width, height = round viewport.height }
+              }
+            , Cmd.none
+            )
+
+        WindowResized width height ->
+            ( { model
+                | screenSize = { width = width, height = height }
+              }
+            , Cmd.none
+            )
+
         WheelDeltaY deltaY ->
             let
                 newZoom =
@@ -266,8 +287,8 @@ view model =
 viewCanvas : Model -> Html Msg
 viewCanvas model =
     div
-        [ style "width" (String.fromInt canvasWidthInPixels ++ "px")
-        , style "height" (String.fromInt canvasHeightInPixels ++ "px")
+        [ style "width" (String.fromInt model.screenSize.width ++ "px")
+        , style "height" (String.fromInt model.screenSize.height ++ "px")
         , style "background-color" "lightgray"
         , style "overflow" "hidden"
         , Html.Events.onMouseDown MouseDownOnCanvas
@@ -327,45 +348,42 @@ panAndZoomToDivTransform pan zoom =
         ++ ")"
 
 
-panAndZoomToSvgViewBox : Point -> Float -> String
-panAndZoomToSvgViewBox pan zoom =
-    [ pan.x
-    , pan.y
-    , toFloat canvasWidthInPixels / zoom
-    , toFloat canvasHeightInPixels / zoom
+panAndZoomToSvgViewBox : Model -> String
+panAndZoomToSvgViewBox model =
+    [ model.pan.x
+    , model.pan.y
+    , toFloat model.screenSize.width / model.zoom
+    , toFloat model.screenSize.height / model.zoom
     ]
         |> List.map String.fromFloat
         |> List.intersperse " "
         |> String.concat
 
 
-canvasWidthInPixels =
-    1200
-
-
-canvasHeightInPixels =
-    600
-
-
 svgCanvas : Model -> Html Msg
 svgCanvas model =
     svg
-        [ SA.width (String.fromInt canvasWidthInPixels)
-        , SA.height (String.fromInt canvasHeightInPixels)
-        , SA.viewBox (panAndZoomToSvgViewBox model.pan model.zoom)
+        [ SA.width (String.fromInt model.screenSize.width)
+        , SA.height (String.fromInt model.screenSize.height)
+        , SA.viewBox (panAndZoomToSvgViewBox model)
         ]
-        [ rect
-            [ width "1200"
-            , height "800"
-            , fill "gray"
-            , Html.Events.onMouseDown MouseDownOnBackgroundRectangle
-            ]
-            []
+        [ backgroundSvgRectangleForMouseInteraction model
 
         --, circle [ cx "200", cy "300", r "10", fill "steelblue" ] []
         , g [] (model.flowGraph |> Dict.map (viewNodeSvg model) |> Dict.values)
         , viewDraggedEdge model
         ]
+
+
+backgroundSvgRectangleForMouseInteraction : Model -> Svg Msg
+backgroundSvgRectangleForMouseInteraction model =
+    rect
+        [ width "1200"
+        , height "800"
+        , fill "gray"
+        , Html.Events.onMouseDown MouseDownOnBackgroundRectangle
+        ]
+        []
 
 
 viewDraggedEdge : Model -> Svg Msg
