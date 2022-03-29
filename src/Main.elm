@@ -2,7 +2,7 @@ module Main exposing (main)
 
 import Browser
 import Browser.Dom as Dom
-import Browser.Events
+import Browser.Events exposing (Visibility)
 import Dict
 import FlowGraph exposing (FlowGraph, Node, NodeId)
 import Geometry exposing (Point)
@@ -29,6 +29,7 @@ main =
 type Msg
     = GotViewport Dom.Viewport
     | WindowResized Int Int
+    | VisibilityChanged Visibility
     | WheelDeltaY Int
     | MouseMove MousePosition
     | MouseDownOnBackgroundRectangle
@@ -95,6 +96,7 @@ subscriptions model =
         , Browser.Events.onKeyUp (JD.map (KeyChanged False) (JD.field "key" JD.string))
         , Browser.Events.onKeyDown (JD.map (KeyChanged True) (JD.field "key" JD.string))
         , Browser.Events.onResize WindowResized
+        , Browser.Events.onVisibilityChange VisibilityChanged
         ]
 
 
@@ -113,6 +115,11 @@ update msg model =
             ( { model
                 | screenSize = { width = round viewport.width, height = round viewport.height }
               }
+            , Cmd.none
+            )
+
+        VisibilityChanged visibility ->
+            ( { model | pressedKeys = Set.empty }
             , Cmd.none
             )
 
