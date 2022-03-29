@@ -33,3 +33,21 @@ vectorFrom p q =
     ( q.x - p.x
     , q.y - p.y
     )
+
+
+distance : Point -> Point -> Float
+distance p q =
+    length
+        ( p.x - q.x
+        , p.y - q.y
+        )
+
+
+length : Vector -> Float
+length v =
+    sqrt (dotProduct v v)
+
+
+dotProduct : Vector -> Vector -> Float
+dotProduct ( x1, y1 ) ( x2, y2 ) =
+    x1 * x2 + y1 * y2

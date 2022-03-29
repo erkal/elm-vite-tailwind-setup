@@ -53,7 +53,7 @@ exampleGraph =
 
               --
               , position = pos
-              , width = 100
+              , width = 200
               , height = 100
               }
             )
@@ -62,10 +62,28 @@ exampleGraph =
         [ makeNode { x = 100, y = 100 } 0 [ 1, 2 ]
         , makeNode { x = 500, y = 400 } 1 [ 2 ]
         , makeNode { x = 800, y = 300 } 2 []
+        , makeNode { x = 1000, y = 100 } 3 []
         ]
+
+
+outEdgeJointCoordinates : Node n e -> Point
+outEdgeJointCoordinates node =
+    node.position |> Geometry.translateBy ( node.width, 0.5 * node.height )
+
+
+inEdgeJointCoordinates : Node n e -> Point
+inEdgeJointCoordinates node =
+    node.position |> Geometry.translateBy ( 0, 0.5 * node.height )
 
 
 moveNode : NodeId -> Point -> FlowGraph () () -> FlowGraph () ()
 moveNode nodeId position flowGraph =
     flowGraph
         |> Dict.update nodeId (Maybe.map (\node -> { node | position = position }))
+
+
+insertEdge : NodeId -> NodeId -> e -> FlowGraph n e -> FlowGraph n e
+insertEdge sourceId targetId edge flowGraph =
+    flowGraph
+        |> Dict.update sourceId
+            (Maybe.map (\node -> { node | outEdges = { edgeData = edge, target = targetId } :: node.outEdges }))

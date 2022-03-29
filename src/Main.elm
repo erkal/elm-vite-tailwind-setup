@@ -5,12 +5,13 @@ import Browser.Events
 import Dict
 import FlowGraph exposing (FlowGraph, Node, NodeId)
 import Geometry exposing (Point)
-import Html exposing (Html, div, text)
+import Html exposing (Html, div, p, text)
 import Html.Attributes exposing (style)
 import Html.Events exposing (..)
 import Json.Decode as JD
-import Svg exposing (circle, rect, svg)
-import Svg.Attributes as SA exposing (cx, cy, fill, height, r, width)
+import Set exposing (Set)
+import Svg exposing (Svg, circle, g, path, rect, svg)
+import Svg.Attributes as SA exposing (cx, cy, d, fill, height, r, stroke, strokeWidth, width)
 
 
 main : Program () Model Msg
@@ -28,12 +29,15 @@ type Msg
     | MouseMove MousePosition
     | MouseDownOnBackgroundRectangle
     | MouseDownOnNode NodeId Point
+    | MouseDownOnCanvas
+    | KeyChanged Bool String
     | MouseUp
 
 
 type alias Model =
     { flowGraph : FlowGraph () ()
     , state : State
+    , pressedKeys : Set String
     , pan :
         -- svg coordinates of the top left corner of the browser window
         Point
@@ -54,12 +58,14 @@ type State
         , brushStart : Point
         , nodePositionAtStart : Point
         }
+    | DrawingEdge { sourceId : NodeId }
 
 
 init : () -> ( Model, Cmd Msg )
 init () =
     ( { flowGraph = FlowGraph.exampleGraph
       , state = Idle
+      , pressedKeys = Set.empty
       , pan = { x = 0, y = 0 }
       , zoom = 1
       , mousePosition = { x = 0, y = 0 }
@@ -80,6 +86,8 @@ subscriptions model =
             (JD.map MouseMove (JD.map2 MousePosition (JD.field "clientX" JD.int) (JD.field "clientY" JD.int)))
         , Browser.Events.onMouseUp
             (JD.succeed MouseUp)
+        , Browser.Events.onKeyUp (JD.map (KeyChanged False) (JD.field "key" JD.string))
+        , Browser.Events.onKeyDown (JD.map (KeyChanged True) (JD.field "key" JD.string))
         ]
 
 
@@ -107,6 +115,18 @@ update msg model =
             , Cmd.none
             )
 
+        KeyChanged isDown key ->
+            ( { model
+                | pressedKeys =
+                    if isDown then
+                        Set.insert key model.pressedKeys
+
+                    else
+                        Set.remove key model.pressedKeys
+              }
+            , Cmd.none
+            )
+
         MouseDownOnBackgroundRectangle ->
             ( { model
                 | state =
@@ -114,6 +134,23 @@ update msg model =
                         { mousePositionAtPanStart = model.mousePosition
                         , panAtStart = model.pan
                         }
+              }
+            , Cmd.none
+            )
+
+        MouseDownOnCanvas ->
+            ( { model
+                | state =
+                    if Set.member "Shift" model.pressedKeys then
+                        case mouseOveredOutEdgeJoint model of
+                            Just nodeId ->
+                                DrawingEdge { sourceId = nodeId }
+
+                            _ ->
+                                model.state
+
+                    else
+                        model.state
               }
             , Cmd.none
             )
@@ -174,15 +211,56 @@ update msg model =
             )
 
         MouseUp ->
-            ( { model | state = Idle }
+            ( { model
+                | state = Idle
+                , flowGraph =
+                    case model.state of
+                        DrawingEdge { sourceId } ->
+                            case mouseOveredInEdgeJoint model of
+                                Just targetId ->
+                                    model.flowGraph |> FlowGraph.insertEdge sourceId targetId ()
+
+                                _ ->
+                                    model.flowGraph
+
+                        _ ->
+                            model.flowGraph
+              }
             , Cmd.none
             )
+
+
+mouseOveredInEdgeJoint : Model -> Maybe NodeId
+mouseOveredInEdgeJoint model =
+    model.flowGraph
+        |> Dict.filter
+            (\_ node ->
+                Geometry.distance (FlowGraph.inEdgeJointCoordinates node) model.svgMousePosition < 15
+            )
+        |> Dict.keys
+        |> List.head
+
+
+mouseOveredOutEdgeJoint : Model -> Maybe NodeId
+mouseOveredOutEdgeJoint model =
+    model.flowGraph
+        |> Dict.filter
+            (\_ node ->
+                Geometry.distance (FlowGraph.outEdgeJointCoordinates node) model.svgMousePosition < 15
+            )
+        |> Dict.keys
+        |> List.head
 
 
 view : Model -> Html Msg
 view model =
     div []
-        [ viewCanvas model ]
+        [ div [ style "position" "absolute" ]
+            [ p [] [ text (Debug.toString model.state) ]
+            , p [] [ text (Debug.toString model.pressedKeys) ]
+            ]
+        , viewCanvas model
+        ]
 
 
 viewCanvas : Model -> Html Msg
@@ -192,6 +270,7 @@ viewCanvas model =
         , style "height" (String.fromInt canvasHeightInPixels ++ "px")
         , style "background-color" "lightgray"
         , style "overflow" "hidden"
+        , Html.Events.onMouseDown MouseDownOnCanvas
         , Html.Events.on "wheel" (JD.map WheelDeltaY (JD.field "deltaY" JD.int))
         ]
         [ htmlCanvas model
@@ -205,11 +284,11 @@ htmlCanvas model =
         [ style "position" "absolute"
         , style "transform" (panAndZoomToDivTransform model.pan model.zoom)
         ]
-        (model.flowGraph |> Dict.map viewNode |> Dict.values)
+        (model.flowGraph |> Dict.map viewNodeHtml |> Dict.values)
 
 
-viewNode : NodeId -> Node () () -> Html Msg
-viewNode nodeId node =
+viewNodeHtml : NodeId -> Node () () -> Html Msg
+viewNodeHtml nodeId node =
     div
         [ style "position" "absolute"
         , style "transform"
@@ -219,10 +298,10 @@ viewNode nodeId node =
                 ++ String.fromFloat node.position.y
                 ++ "px)"
             )
-        , style "width" "200px"
-        , style "height" "100px"
-        , style "background-color" "red"
-        , style "opacity" "0.6"
+        , style "width" (String.fromFloat node.width ++ "px")
+        , style "height" (String.fromFloat node.height ++ "px")
+        , style "background-color" "orange"
+        , style "opacity" "0.4"
         , style "padding" "10px"
         , Html.Events.onMouseDown (MouseDownOnNode nodeId node.position)
         ]
@@ -282,6 +361,76 @@ svgCanvas model =
             , Html.Events.onMouseDown MouseDownOnBackgroundRectangle
             ]
             []
-        , circle [ cx "200", cy "300", r "10", fill "steelblue" ] []
-        , circle [ cx "240", cy "310", r "20", fill "steelblue" ] []
+
+        --, circle [ cx "200", cy "300", r "10", fill "steelblue" ] []
+        , g [] (model.flowGraph |> Dict.map (viewNodeSvg model) |> Dict.values)
+        , viewDraggedEdge model
         ]
+
+
+viewDraggedEdge : Model -> Svg Msg
+viewDraggedEdge model =
+    case model.state of
+        DrawingEdge { sourceId } ->
+            Dict.get sourceId model.flowGraph
+                |> Maybe.map
+                    (\node ->
+                        viewEdgeSvg (FlowGraph.outEdgeJointCoordinates node) model.svgMousePosition
+                    )
+                |> Maybe.withDefault (g [] [])
+
+        _ ->
+            g [] []
+
+
+viewEdgeSvg : Point -> Point -> Svg Msg
+viewEdgeSvg startPoint endPoint =
+    let
+        dxdy =
+            endPoint
+                |> Geometry.translateBy ( -startPoint.x, -startPoint.y )
+
+        dx1dy1 =
+            { x = 0.5 * dxdy.x
+            , y = 0
+            }
+
+        dx2dy2 =
+            { x = dxdy.x - 0.5 * dxdy.x
+            , y = dxdy.y
+            }
+
+        toStr { x, y } =
+            String.fromFloat x ++ "," ++ String.fromFloat y
+    in
+    path
+        [ d <|
+            "M "
+                ++ toStr startPoint
+                ++ " c "
+                ++ toStr dx1dy1
+                ++ " "
+                ++ toStr dx2dy2
+                ++ " "
+                ++ toStr dxdy
+        , stroke "black"
+        , fill "none"
+        , strokeWidth "4"
+        ]
+        []
+
+
+viewNodeSvg : Model -> NodeId -> Node () () -> Svg Msg
+viewNodeSvg model nodeId node =
+    let
+        viewEdgeSvg_ { target } =
+            let
+                endPoint =
+                    model.flowGraph
+                        |> Dict.get target
+                        |> Maybe.map (\n -> n.position |> Geometry.translateBy ( 0, 0.5 * n.height ))
+                        |> Maybe.withDefault { x = 0, y = 0 }
+            in
+            viewEdgeSvg (FlowGraph.outEdgeJointCoordinates node) endPoint
+    in
+    g [] (node.outEdges |> List.map viewEdgeSvg_)
