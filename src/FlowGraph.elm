@@ -16,18 +16,12 @@ type alias NodeId =
 
 type alias Node n e =
     { nodeData : n
-    , outEdges : List (Edge e)
+    , outEdges : Dict NodeId e
 
     --
     , position : Point
     , width : Float
     , height : Float
-    }
-
-
-type alias Edge e =
-    { edgeData : e
-    , target : NodeId
     }
 
 
@@ -44,12 +38,8 @@ exampleGraph =
             , { nodeData = ()
               , outEdges =
                     edgeTargets
-                        |> List.map
-                            (\target ->
-                                { edgeData = ()
-                                , target = target
-                                }
-                            )
+                        |> List.map (\target -> ( target, () ))
+                        |> Dict.fromList
 
               --
               , position = pos
@@ -86,4 +76,4 @@ insertEdge : NodeId -> NodeId -> e -> FlowGraph n e -> FlowGraph n e
 insertEdge sourceId targetId edge flowGraph =
     flowGraph
         |> Dict.update sourceId
-            (Maybe.map (\node -> { node | outEdges = { edgeData = edge, target = targetId } :: node.outEdges }))
+            (Maybe.map (\node -> { node | outEdges = node.outEdges |> Dict.insert targetId edge }))

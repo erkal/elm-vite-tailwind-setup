@@ -423,7 +423,7 @@ viewEdgeSvg startPoint endPoint =
 viewNodeSvg : Model -> NodeId -> Node () () -> Svg Msg
 viewNodeSvg model nodeId node =
     let
-        viewEdgeSvg_ { target } =
+        viewEdgeSvg_ target _ =
             let
                 endPoint =
                     model.flowGraph
@@ -433,4 +433,4 @@ viewNodeSvg model nodeId node =
             in
             viewEdgeSvg (FlowGraph.outEdgeJointCoordinates node) endPoint
     in
-    g [] (node.outEdges |> List.map viewEdgeSvg_)
+    g [] (node.outEdges |> Dict.map viewEdgeSvg_ |> Dict.values)
