@@ -9,6 +9,14 @@ type alias Vector =
     ( Float, Float )
 
 
+type alias BoundingBox =
+    { minX : Float
+    , maxX : Float
+    , minY : Float
+    , maxY : Float
+    }
+
+
 scaleAbout : Point -> Float -> Point -> Point
 scaleAbout centerPoint scale point =
     vectorFrom centerPoint point
@@ -51,3 +59,27 @@ length v =
 dotProduct : Vector -> Vector -> Float
 dotProduct ( x1, y1 ) ( x2, y2 ) =
     x1 * x2 + y1 * y2
+
+
+boundingBoxFrom : Point -> Point -> BoundingBox
+boundingBoxFrom firstPoint secondPoint =
+    let
+        ( x1, y1 ) =
+            ( firstPoint.x, firstPoint.y )
+
+        ( x2, y2 ) =
+            ( secondPoint.x, secondPoint.y )
+    in
+    { minX = min x1 x2
+    , maxX = max x1 x2
+    , minY = min y1 y2
+    , maxY = max y1 y2
+    }
+
+
+intersects : BoundingBox -> BoundingBox -> Bool
+intersects other boundingBox =
+    (boundingBox.minX <= other.maxX)
+        && (boundingBox.maxX >= other.minX)
+        && (boundingBox.minY <= other.maxY)
+        && (boundingBox.maxY >= other.minY)

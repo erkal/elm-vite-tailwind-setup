@@ -12,7 +12,7 @@ import Html.Events exposing (..)
 import Json.Decode as JD
 import Set exposing (Set)
 import Svg exposing (Svg, circle, g, path, rect, svg)
-import Svg.Attributes as SA exposing (cx, cy, d, fill, height, r, stroke, strokeWidth, width, x, y)
+import Svg.Attributes as SA exposing (cx, cy, d, fill, height, r, stroke, strokeDasharray, strokeWidth, width, x, y)
 import Task
 
 
@@ -64,7 +64,12 @@ type State
         { mousePositionAtDragStart : Point
         , nodePositionsAtStart : List ( NodeId, Point )
         }
-    | DrawingEdge { sourceId : NodeId }
+    | BrushingSelectionRectangle
+        { mousePositionAtBrushStart : Point
+        }
+    | DrawingEdge
+        { sourceId : NodeId
+        }
 
 
 init : () -> ( Model, Cmd Msg )
@@ -171,6 +176,9 @@ update msg model =
                             _ ->
                                 model.state
 
+                    else if Set.member "s" model.pressedKeys then
+                        BrushingSelectionRectangle { mousePositionAtBrushStart = model.svgMousePosition }
+
                     else
                         model.state
               }
@@ -228,6 +236,21 @@ update msg model =
                     }
                         |> Geometry.scaleAbout { x = 0, y = 0 } (1 / model.zoom)
                         |> Geometry.translateBy ( model.pan.x, model.pan.y )
+                , selectedNodes =
+                    case model.state of
+                        BrushingSelectionRectangle { mousePositionAtBrushStart } ->
+                            model.flowGraph
+                                |> Dict.filter
+                                    (\_ node ->
+                                        Geometry.intersects
+                                            (Geometry.boundingBoxFrom mousePositionAtBrushStart model.svgMousePosition)
+                                            (FlowGraph.boundingBox node)
+                                    )
+                                |> Dict.keys
+                                |> Set.fromList
+
+                        _ ->
+                            model.selectedNodes
                 , flowGraph =
                     case model.state of
                         DraggingNodes { mousePositionAtDragStart, nodePositionsAtStart } ->
@@ -314,6 +337,7 @@ view model =
         [ div [ style "position" "absolute", style "margin" "10px" ]
             [ p [] [ text "Shift + click to select/deselect nodes" ]
             , p [] [ text "To draw edges, hold the `e` key down and drag with mouse" ]
+            , p [] [ text "To brush a selection, hold the `s` key down and drag with the mouse" ]
             ]
         , div [ style "position" "absolute", style "margin" "10px", style "bottom" "0px" ]
             [ p [] [ text ("`state`: " ++ Debug.toString model.state) ]
@@ -409,7 +433,8 @@ svgCanvas model =
         , SA.height (String.fromInt model.screenSize.height)
         , SA.viewBox (panAndZoomToSvgViewBox model)
         ]
-        [ backgroundSvgRectangleForMouseInteraction model
+        [ viewBackgroundSvgRectangleForMouseInteraction model
+        , viewSelectionRectangle model
 
         --, circle [ cx "200", cy "300", r "10", fill "steelblue" ] []
         , g [] (model.flowGraph |> Dict.map (viewNodeSvg model) |> Dict.values)
@@ -417,8 +442,32 @@ svgCanvas model =
         ]
 
 
-backgroundSvgRectangleForMouseInteraction : Model -> Svg Msg
-backgroundSvgRectangleForMouseInteraction model =
+viewSelectionRectangle : Model -> Svg Msg
+viewSelectionRectangle model =
+    case model.state of
+        BrushingSelectionRectangle { mousePositionAtBrushStart } ->
+            let
+                { maxX, minX, maxY, minY } =
+                    Geometry.boundingBoxFrom mousePositionAtBrushStart model.svgMousePosition
+            in
+            rect
+                [ x (String.fromFloat minX)
+                , y (String.fromFloat minY)
+                , width (String.fromFloat (maxX - minX))
+                , height (String.fromFloat (maxY - minY))
+                , fill "none"
+                , stroke "black"
+                , strokeWidth "2"
+                , strokeDasharray "5,5"
+                ]
+                []
+
+        _ ->
+            g [] []
+
+
+viewBackgroundSvgRectangleForMouseInteraction : Model -> Svg Msg
+viewBackgroundSvgRectangleForMouseInteraction model =
     rect
         [ width (String.fromFloat (toFloat model.screenSize.width / model.zoom))
         , height (String.fromFloat (toFloat model.screenSize.height / model.zoom))

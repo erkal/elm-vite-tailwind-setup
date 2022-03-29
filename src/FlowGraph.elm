@@ -1,7 +1,7 @@
 module FlowGraph exposing (..)
 
 import Dict exposing (Dict)
-import Geometry exposing (Point)
+import Geometry exposing (BoundingBox, Point)
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 
@@ -79,3 +79,12 @@ insertEdge sourceId targetId edge flowGraph =
     flowGraph
         |> Dict.update sourceId
             (Maybe.map (\node -> { node | outEdges = node.outEdges |> Dict.insert targetId edge }))
+
+
+boundingBox : Node n e -> BoundingBox
+boundingBox node =
+    { minX = node.position.x
+    , maxX = node.position.x + node.width
+    , minY = node.position.y
+    , maxY = node.position.y + node.height
+    }
