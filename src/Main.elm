@@ -12,7 +12,7 @@ import Html.Events exposing (..)
 import Json.Decode as JD
 import Set exposing (Set)
 import Svg exposing (Svg, circle, g, path, rect, svg)
-import Svg.Attributes as SA exposing (cx, cy, d, fill, height, r, stroke, strokeWidth, width)
+import Svg.Attributes as SA exposing (cx, cy, d, fill, height, r, stroke, strokeWidth, width, x, y)
 import Task
 
 
@@ -378,9 +378,11 @@ svgCanvas model =
 backgroundSvgRectangleForMouseInteraction : Model -> Svg Msg
 backgroundSvgRectangleForMouseInteraction model =
     rect
-        [ width "1200"
-        , height "800"
-        , fill "gray"
+        [ width (String.fromFloat (toFloat model.screenSize.width / model.zoom))
+        , height (String.fromFloat (toFloat model.screenSize.height / model.zoom))
+        , x (String.fromFloat model.pan.x)
+        , y (String.fromFloat model.pan.y)
+        , fill "steelblue"
         , Html.Events.onMouseDown MouseDownOnBackgroundRectangle
         ]
         []
