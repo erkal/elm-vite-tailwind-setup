@@ -33,7 +33,7 @@ type Msg
     | WheelDeltaY Int
     | MouseMove MousePosition
     | MouseDownOnBackgroundRectangle
-    | MouseDownOnNode NodeId Point
+    | MouseDownOnNode NodeId
     | MouseDownOnCanvas
     | KeyChanged Bool String
     | MouseUp
@@ -44,6 +44,7 @@ type alias Model =
     , state : State
     , screenSize : { width : Int, height : Int }
     , pressedKeys : Set String
+    , selectedNodes : Set NodeId
     , pan :
         -- svg coordinates of the top left corner of the browser window
         Point
@@ -59,10 +60,9 @@ type State
         { mousePositionAtPanStart : MousePosition
         , panAtStart : Point
         }
-    | DraggingNode
-        { nodeId : NodeId
-        , brushStart : Point
-        , nodePositionAtStart : Point
+    | DraggingNodes
+        { brushStart : Point
+        , nodePositionsAtStart : List ( NodeId, Point )
         }
     | DrawingEdge { sourceId : NodeId }
 
@@ -73,6 +73,7 @@ init () =
       , state = Idle
       , screenSize = { width = 800, height = 600 }
       , pressedKeys = Set.empty
+      , selectedNodes = Set.empty
       , pan = { x = 0, y = 0 }
       , zoom = 1
       , mousePosition = { x = 0, y = 0 }
@@ -98,14 +99,6 @@ subscriptions model =
         , Browser.Events.onResize WindowResized
         , Browser.Events.onVisibilityChange VisibilityChanged
         ]
-
-
-minZoom =
-    0.25
-
-
-maxZoom =
-    1
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -134,7 +127,7 @@ update msg model =
             let
                 newZoom =
                     (model.zoom + 0.0005 * toFloat -deltaY)
-                        |> clamp minZoom maxZoom
+                        |> clamp 0.25 1
             in
             ( { model
                 | zoom = newZoom
@@ -162,6 +155,7 @@ update msg model =
                         { mousePositionAtPanStart = model.mousePosition
                         , panAtStart = model.pan
                         }
+                , selectedNodes = Set.empty
               }
             , Cmd.none
             )
@@ -169,7 +163,7 @@ update msg model =
         MouseDownOnCanvas ->
             ( { model
                 | state =
-                    if Set.member "Shift" model.pressedKeys then
+                    if Set.member "e" model.pressedKeys then
                         case mouseOveredOutEdgeJoint model of
                             Just nodeId ->
                                 DrawingEdge { sourceId = nodeId }
@@ -183,15 +177,45 @@ update msg model =
             , Cmd.none
             )
 
-        MouseDownOnNode nodeId nodePositionAtStart ->
-            ( { model
-                | state =
-                    DraggingNode
-                        { nodeId = nodeId
-                        , brushStart = model.svgMousePosition
-                        , nodePositionAtStart = nodePositionAtStart
-                        }
-              }
+        MouseDownOnNode nodeId ->
+            ( if Set.member "Shift" model.pressedKeys then
+                { model
+                    | selectedNodes =
+                        if Set.member nodeId model.selectedNodes then
+                            Set.remove nodeId model.selectedNodes
+
+                        else
+                            Set.insert nodeId model.selectedNodes
+                }
+
+              else
+                { model
+                    | state =
+                        DraggingNodes
+                            { brushStart = model.svgMousePosition
+                            , nodePositionsAtStart =
+                                (if Set.member nodeId model.selectedNodes then
+                                    Set.toList model.selectedNodes
+
+                                 else
+                                    [ nodeId ]
+                                )
+                                    |> List.map
+                                        (\nodeId_ ->
+                                            model.flowGraph
+                                                |> Dict.get nodeId_
+                                                |> Maybe.map .position
+                                                |> Maybe.withDefault { x = 0, y = 0 }
+                                                |> (\position -> ( nodeId_, position ))
+                                        )
+                            }
+                    , selectedNodes =
+                        if Set.member nodeId model.selectedNodes then
+                            model.selectedNodes
+
+                        else
+                            Set.empty
+                }
             , Cmd.none
             )
 
@@ -206,12 +230,16 @@ update msg model =
                         |> Geometry.translateBy ( model.pan.x, model.pan.y )
                 , flowGraph =
                     case model.state of
-                        DraggingNode { nodeId, brushStart, nodePositionAtStart } ->
+                        DraggingNodes { brushStart, nodePositionsAtStart } ->
                             model.flowGraph
-                                |> FlowGraph.moveNode nodeId
-                                    (nodePositionAtStart
-                                        |> Geometry.translateBy
-                                            (Geometry.vectorFrom brushStart model.svgMousePosition)
+                                |> FlowGraph.moveNodes
+                                    (nodePositionsAtStart
+                                        |> List.map
+                                            (Tuple.mapSecond
+                                                (Geometry.translateBy
+                                                    (Geometry.vectorFrom brushStart model.svgMousePosition)
+                                                )
+                                            )
                                     )
 
                         _ ->
@@ -283,9 +311,12 @@ mouseOveredOutEdgeJoint model =
 view : Model -> Html Msg
 view model =
     div []
-        [ div [ style "position" "absolute" ]
-            [ p [] [ text (Debug.toString model.state) ]
-            , p [] [ text (Debug.toString model.pressedKeys) ]
+        [ div [ style "position" "absolute", style "margin" "10px" ]
+            [ p [] [ text "Shift + click to select/deselect nodes" ]
+            , p [] [ text "To draw edges, hold the `e` key down and drag with mouse" ]
+            ]
+        , div [ style "position" "absolute", style "margin" "10px", style "bottom" "0px" ]
+            [ p [] [ text ("`state`: " ++ Debug.toString model.state) ]
             ]
         , viewCanvas model
         ]
@@ -312,11 +343,11 @@ htmlCanvas model =
         [ style "position" "absolute"
         , style "transform" (panAndZoomToDivTransform model.pan model.zoom)
         ]
-        (model.flowGraph |> Dict.map viewNodeHtml |> Dict.values)
+        (model.flowGraph |> Dict.map (viewNodeHtml model) |> Dict.values)
 
 
-viewNodeHtml : NodeId -> Node () () -> Html Msg
-viewNodeHtml nodeId node =
+viewNodeHtml : Model -> NodeId -> Node () () -> Html Msg
+viewNodeHtml model nodeId node =
     div
         [ style "position" "absolute"
         , style "transform"
@@ -328,13 +359,17 @@ viewNodeHtml nodeId node =
             )
         , style "width" (String.fromFloat node.width ++ "px")
         , style "height" (String.fromFloat node.height ++ "px")
-        , style "background-color" "orange"
-        , style "opacity" "0.4"
+        , style "background-color" "rgba(100,10,200,0.7)"
         , style "padding" "10px"
-        , Html.Events.onMouseDown (MouseDownOnNode nodeId node.position)
+        , Html.Events.onMouseDown (MouseDownOnNode nodeId)
+        , style "border" <|
+            if Set.member nodeId model.selectedNodes then
+                "black solid 5px"
+
+            else
+                "none"
         ]
-        [ text "Html"
-        ]
+        []
 
 
 panAndZoomToDivTransform : Point -> Float -> String

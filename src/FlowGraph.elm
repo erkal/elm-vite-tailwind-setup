@@ -66,10 +66,12 @@ inEdgeJointCoordinates node =
     node.position |> Geometry.translateBy ( 0, 0.5 * node.height )
 
 
-moveNode : NodeId -> Point -> FlowGraph () () -> FlowGraph () ()
-moveNode nodeId position flowGraph =
-    flowGraph
-        |> Dict.update nodeId (Maybe.map (\node -> { node | position = position }))
+moveNodes : List ( NodeId, Point ) -> FlowGraph () () -> FlowGraph () ()
+moveNodes l flowGraph =
+    l
+        |> List.foldl
+            (\( nodeId, position ) acc -> Dict.update nodeId (Maybe.map (\node -> { node | position = position })) acc)
+            flowGraph
 
 
 insertEdge : NodeId -> NodeId -> e -> FlowGraph n e -> FlowGraph n e
