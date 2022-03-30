@@ -2,8 +2,7 @@ module FlowGraph exposing (..)
 
 import Dict exposing (Dict)
 import Geometry exposing (BoundingBox, Point)
-import Html exposing (Html, div)
-import Html.Attributes exposing (style)
+import Set exposing (Set)
 
 
 type alias FlowGraph n e =
@@ -11,7 +10,7 @@ type alias FlowGraph n e =
 
 
 type alias NodeId =
-    Int
+    String
 
 
 type alias Node n e =
@@ -49,10 +48,10 @@ exampleGraph =
             )
     in
     Dict.fromList
-        [ makeNode { x = 100, y = 100 } 0 [ 1, 2 ]
-        , makeNode { x = 500, y = 400 } 1 [ 2 ]
-        , makeNode { x = 800, y = 300 } 2 []
-        , makeNode { x = 1000, y = 100 } 3 []
+        [ makeNode { x = 100, y = 100 } "0" [ "1", "2" ]
+        , makeNode { x = 500, y = 400 } "1" [ "2" ]
+        , makeNode { x = 800, y = 300 } "2" []
+        , makeNode { x = 1000, y = 100 } "3" []
         ]
 
 
@@ -88,3 +87,37 @@ boundingBox node =
     , minY = node.position.y
     , maxY = node.position.y + node.height
     }
+
+
+inducedSubgraph : Set NodeId -> FlowGraph n e -> FlowGraph n e
+inducedSubgraph nodeIds flowGraph =
+    flowGraph
+        |> Dict.filter (\nodeId _ -> Set.member nodeId nodeIds)
+        |> Dict.map (\_ node -> { node | outEdges = node.outEdges |> Dict.filter (\nodeId _ -> Set.member nodeId nodeIds) })
+
+
+duplicateSubgraph : Set NodeId -> FlowGraph n e -> FlowGraph n e
+duplicateSubgraph nodeIds flowGraph =
+    let
+        newName nodeId =
+            -- TODO
+            nodeId
+    in
+    Dict.union flowGraph
+        (inducedSubgraph nodeIds flowGraph
+            |> Dict.toList
+            |> List.map
+                (Tuple.mapBoth
+                    ((++) "copy-")
+                    (\node ->
+                        { node
+                            | outEdges =
+                                node.outEdges
+                                    |> Dict.toList
+                                    |> List.map (Tuple.mapFirst ((++) "copy-"))
+                                    |> Dict.fromList
+                        }
+                    )
+                )
+            |> Dict.fromList
+        )

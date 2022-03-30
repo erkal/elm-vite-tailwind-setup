@@ -196,6 +196,37 @@ update msg model =
                             Set.insert nodeId model.selectedNodes
                 }
 
+              else if Set.member "Alt" model.pressedKeys then
+                { model
+                    | flowGraph =
+                        if Set.member nodeId model.selectedNodes then
+                            model.flowGraph |> FlowGraph.duplicateSubgraph model.selectedNodes
+
+                        else
+                            model.flowGraph |> FlowGraph.duplicateSubgraph (Set.singleton nodeId)
+                    , selectedNodes =
+                        model.selectedNodes |> Set.map ((++) "copy-")
+                    , state =
+                        DraggingNodes
+                            { mousePositionAtDragStart = model.svgMousePosition
+                            , nodePositionsAtStart =
+                                (if Set.member nodeId model.selectedNodes then
+                                    Set.toList model.selectedNodes
+
+                                 else
+                                    [ nodeId ]
+                                )
+                                    |> List.map
+                                        (\nodeId_ ->
+                                            model.flowGraph
+                                                |> Dict.get nodeId_
+                                                |> Maybe.map .position
+                                                |> Maybe.withDefault { x = 0, y = 0 }
+                                                |> (\position -> ( (++) "copy-" nodeId_, position ))
+                                        )
+                            }
+                }
+
               else
                 { model
                     | state =
@@ -335,9 +366,10 @@ view : Model -> Html Msg
 view model =
     div []
         [ div [ style "position" "absolute", style "margin" "10px" ]
-            [ p [] [ text "Shift + click to select/deselect nodes" ]
-            , p [] [ text "To draw edges, hold the `e` key down and drag with mouse" ]
-            , p [] [ text "To brush a selection, hold the `s` key down and drag with the mouse" ]
+            [ p [] [ text "Select/Deselect nodes: `Shift` + click" ]
+            , p [] [ text "Drawing edges: hold the `e` key down and drag" ]
+            , p [] [ text "Brushing a selection: hold the `s` key down and drag" ]
+            , p [] [ text "Duplicating a selection: hold the `Alt` key down and drag" ]
             ]
         , div [ style "position" "absolute", style "margin" "10px", style "bottom" "0px" ]
             [ p [] [ text ("`state`: " ++ Debug.toString model.state) ]
@@ -502,14 +534,26 @@ viewEdgeSvg startPoint endPoint =
                 |> Geometry.translateBy ( -startPoint.x, -startPoint.y )
 
         dx1dy1 =
-            { x = 0.5 * dxdy.x
-            , y = 0
-            }
+            if startPoint.x < endPoint.x then
+                { x = 0.5 * dxdy.x
+                , y = 0
+                }
+
+            else
+                { x = -0.5 * dxdy.x
+                , y = 0
+                }
 
         dx2dy2 =
-            { x = dxdy.x - 0.5 * dxdy.x
-            , y = dxdy.y
-            }
+            if startPoint.x < endPoint.x then
+                { x = dxdy.x - 0.5 * dxdy.x
+                , y = dxdy.y
+                }
+
+            else
+                { x = dxdy.x + 0.2 * dxdy.x
+                , y = dxdy.y
+                }
 
         toStr { x, y } =
             String.fromFloat x ++ "," ++ String.fromFloat y
