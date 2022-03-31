@@ -2,7 +2,7 @@ module Colors exposing (..)
 
 
 backgroundGray =
-    "rgb(229, 229, 229)"
+    "rgb(229,  229, 229)"
 
 
 edgeBlue =
