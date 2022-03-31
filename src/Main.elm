@@ -612,7 +612,7 @@ viewNodeSvg model nodeId node =
                 endPoint =
                     model.flowGraph
                         |> Dict.get target
-                        |> Maybe.map (\n -> n.position |> Geometry.translateBy ( 0, 0.5 * n.height ))
+                        |> Maybe.map FlowGraph.inEdgeJointCoordinates
                         |> Maybe.withDefault { x = 0, y = 0 }
             in
             viewEdgeSvg (FlowGraph.outEdgeJointCoordinates node) endPoint

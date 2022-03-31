@@ -62,7 +62,7 @@ outEdgeJointCoordinates node =
 
 inEdgeJointCoordinates : Node n e -> Point
 inEdgeJointCoordinates node =
-    node.position |> Geometry.translateBy ( 0, 0.5 * node.height )
+    node.position |> Geometry.translateBy ( 0, 16 )
 
 
 moveNodes : List ( NodeId, Point ) -> FlowGraph () () -> FlowGraph () ()
