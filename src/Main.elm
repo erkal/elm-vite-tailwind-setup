@@ -3,6 +3,7 @@ module Main exposing (main)
 import Browser
 import Browser.Dom as Dom
 import Browser.Events exposing (Visibility)
+import Colors
 import Dict
 import FlowGraph exposing (FlowGraph, Node, NodeId)
 import Geometry exposing (Point)
@@ -11,8 +12,8 @@ import Html.Attributes exposing (style)
 import Html.Events exposing (..)
 import Json.Decode as JD
 import Set exposing (Set)
-import Svg exposing (Svg, circle, g, path, rect, svg)
-import Svg.Attributes as SA exposing (cx, cy, d, fill, height, r, stroke, strokeDasharray, strokeWidth, width, x, y)
+import Svg exposing (Svg, circle, defs, g, marker, path, polygon, rect, svg)
+import Svg.Attributes as SA exposing (cx, cy, d, fill, height, id, markerEnd, markerHeight, markerWidth, orient, points, r, refX, refY, stroke, strokeDasharray, strokeWidth, width, x, y)
 import Task
 
 
@@ -136,7 +137,9 @@ update msg model =
             in
             ( { model
                 | zoom = newZoom
-                , pan = model.pan |> Geometry.scaleAbout model.svgMousePosition (model.zoom / newZoom)
+                , pan =
+                    model.pan
+                        |> Geometry.scaleAbout model.svgMousePosition (model.zoom / newZoom)
               }
             , Cmd.none
             )
@@ -197,32 +200,29 @@ update msg model =
                 }
 
               else if Set.member "Alt" model.pressedKeys then
-                { model
-                    | flowGraph =
+                let
+                    ( newFlowGraph, idsOfDuplicatedNodes ) =
                         if Set.member nodeId model.selectedNodes then
                             model.flowGraph |> FlowGraph.duplicateSubgraph model.selectedNodes
 
                         else
                             model.flowGraph |> FlowGraph.duplicateSubgraph (Set.singleton nodeId)
-                    , selectedNodes =
-                        model.selectedNodes |> Set.map ((++) "copy-")
+                in
+                { model
+                    | flowGraph = newFlowGraph
+                    , selectedNodes = Set.fromList idsOfDuplicatedNodes
                     , state =
                         DraggingNodes
                             { mousePositionAtDragStart = model.svgMousePosition
                             , nodePositionsAtStart =
-                                (if Set.member nodeId model.selectedNodes then
-                                    Set.toList model.selectedNodes
-
-                                 else
-                                    [ nodeId ]
-                                )
+                                idsOfDuplicatedNodes
                                     |> List.map
                                         (\nodeId_ ->
-                                            model.flowGraph
+                                            newFlowGraph
                                                 |> Dict.get nodeId_
                                                 |> Maybe.map .position
                                                 |> Maybe.withDefault { x = 0, y = 0 }
-                                                |> (\position -> ( (++) "copy-" nodeId_, position ))
+                                                |> (\position -> ( nodeId_, position ))
                                         )
                             }
                 }
@@ -415,7 +415,7 @@ viewNodeHtml model nodeId node =
             )
         , style "width" (String.fromFloat node.width ++ "px")
         , style "height" (String.fromFloat node.height ++ "px")
-        , style "background-color" "rgba(100,10,200,0.7)"
+        , style "background-color" Colors.nodeBackgroundWhite
         , style "padding" "10px"
         , Html.Events.onMouseDown (MouseDownOnNode nodeId)
         , style "border" <|
@@ -465,12 +465,31 @@ svgCanvas model =
         , SA.height (String.fromInt model.screenSize.height)
         , SA.viewBox (panAndZoomToSvgViewBox model)
         ]
-        [ viewBackgroundSvgRectangleForMouseInteraction model
+        [ defs [] [ markerForArrowHead ]
+        , viewBackgroundSvgRectangleForMouseInteraction model
         , viewSelectionRectangle model
 
         --, circle [ cx "200", cy "300", r "10", fill "steelblue" ] []
         , g [] (model.flowGraph |> Dict.map (viewNodeSvg model) |> Dict.values)
         , viewDraggedEdge model
+        ]
+
+
+markerForArrowHead : Svg Msg
+markerForArrowHead =
+    marker
+        [ id "arrowhead"
+        , markerWidth "5"
+        , markerHeight "5.6"
+        , refX "3"
+        , refY "2.8"
+        , orient "auto"
+        ]
+        [ polygon
+            [ points "5,2.8 0,5.6 0,0"
+            , fill Colors.edgeBlue
+            ]
+            []
         ]
 
 
@@ -505,7 +524,7 @@ viewBackgroundSvgRectangleForMouseInteraction model =
         , height (String.fromFloat (toFloat model.screenSize.height / model.zoom))
         , x (String.fromFloat model.pan.x)
         , y (String.fromFloat model.pan.y)
-        , fill "steelblue"
+        , fill Colors.backgroundGray
         , Html.Events.onMouseDown MouseDownOnBackgroundRectangle
         ]
         []
@@ -531,48 +550,58 @@ viewEdgeSvg startPoint endPoint =
     let
         dxdy =
             endPoint
-                |> Geometry.translateBy ( -startPoint.x, -startPoint.y )
+                |> Geometry.translateBy ( -startPoint.x - 2, -startPoint.y )
+
+        edgeBending =
+            0.5
+
+        backEdgeBending =
+            1
 
         dx1dy1 =
             if startPoint.x < endPoint.x then
-                { x = 0.5 * dxdy.x
+                { x = edgeBending * dxdy.x
                 , y = 0
                 }
 
             else
-                { x = -0.5 * dxdy.x
+                { x = -backEdgeBending * dxdy.x
                 , y = 0
                 }
 
         dx2dy2 =
             if startPoint.x < endPoint.x then
-                { x = dxdy.x - 0.5 * dxdy.x
+                { x = dxdy.x - edgeBending * dxdy.x
                 , y = dxdy.y
                 }
 
             else
-                { x = dxdy.x + 0.2 * dxdy.x
+                { x = dxdy.x + backEdgeBending * dxdy.x
                 , y = dxdy.y
                 }
 
         toStr { x, y } =
             String.fromFloat x ++ "," ++ String.fromFloat y
+
+        curvedLine =
+            path
+                [ d <|
+                    "M "
+                        ++ toStr startPoint
+                        ++ " c "
+                        ++ toStr dx1dy1
+                        ++ " "
+                        ++ toStr dx2dy2
+                        ++ " "
+                        ++ toStr dxdy
+                , stroke Colors.edgeBlue
+                , strokeWidth "1"
+                , fill "none"
+                , markerEnd "url(#arrowhead)"
+                ]
+                []
     in
-    path
-        [ d <|
-            "M "
-                ++ toStr startPoint
-                ++ " c "
-                ++ toStr dx1dy1
-                ++ " "
-                ++ toStr dx2dy2
-                ++ " "
-                ++ toStr dxdy
-        , stroke "black"
-        , fill "none"
-        , strokeWidth "4"
-        ]
-        []
+    curvedLine
 
 
 viewNodeSvg : Model -> NodeId -> Node () () -> Svg Msg

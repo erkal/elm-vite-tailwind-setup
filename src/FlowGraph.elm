@@ -10,7 +10,7 @@ type alias FlowGraph n e =
 
 
 type alias NodeId =
-    String
+    Int
 
 
 type alias Node n e =
@@ -48,10 +48,10 @@ exampleGraph =
             )
     in
     Dict.fromList
-        [ makeNode { x = 100, y = 100 } "0" [ "1", "2" ]
-        , makeNode { x = 500, y = 400 } "1" [ "2" ]
-        , makeNode { x = 800, y = 300 } "2" []
-        , makeNode { x = 1000, y = 100 } "3" []
+        [ makeNode { x = 100, y = 100 } 0 [ 1, 2 ]
+        , makeNode { x = 500, y = 400 } 1 [ 2 ]
+        , makeNode { x = 800, y = 300 } 2 []
+        , makeNode { x = 1000, y = 100 } 3 []
         ]
 
 
@@ -96,28 +96,40 @@ inducedSubgraph nodeIds flowGraph =
         |> Dict.map (\_ node -> { node | outEdges = node.outEdges |> Dict.filter (\nodeId _ -> Set.member nodeId nodeIds) })
 
 
-duplicateSubgraph : Set NodeId -> FlowGraph n e -> FlowGraph n e
+duplicateSubgraph : Set NodeId -> FlowGraph n e -> ( FlowGraph n e, List NodeId )
 duplicateSubgraph nodeIds flowGraph =
     let
-        newName nodeId =
-            -- TODO
-            nodeId
+        maxNodeId : NodeId
+        maxNodeId =
+            flowGraph
+                |> Dict.keys
+                |> List.maximum
+                |> Maybe.withDefault 0
+
+        newNodeIds : Dict NodeId NodeId
+        newNodeIds =
+            nodeIds
+                |> Set.toList
+                |> List.indexedMap (\i nodeId -> ( nodeId, maxNodeId + 1 + i ))
+                |> Dict.fromList
     in
-    Dict.union flowGraph
+    ( Dict.union flowGraph
         (inducedSubgraph nodeIds flowGraph
             |> Dict.toList
             |> List.map
                 (Tuple.mapBoth
-                    ((++) "copy-")
+                    (\nodeId -> Dict.get nodeId newNodeIds |> Maybe.withDefault 0)
                     (\node ->
                         { node
                             | outEdges =
                                 node.outEdges
                                     |> Dict.toList
-                                    |> List.map (Tuple.mapFirst ((++) "copy-"))
+                                    |> List.map (Tuple.mapFirst (\nodeId_ -> Dict.get nodeId_ newNodeIds |> Maybe.withDefault 0))
                                     |> Dict.fromList
                         }
                     )
                 )
             |> Dict.fromList
         )
+    , Dict.values newNodeIds
+    )
