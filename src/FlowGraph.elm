@@ -42,7 +42,7 @@ exampleGraph =
 
               --
               , position = pos
-              , width = 200
+              , width = 240
               , height = 100
               }
             )

@@ -2,7 +2,7 @@ module Colors exposing (..)
 
 
 backgroundGray =
-    "rgb(229,  229, 229)"
+    "#E5E5E5"
 
 
 edgeBlue =
@@ -10,4 +10,24 @@ edgeBlue =
 
 
 nodeBackgroundWhite =
-    "rgb(252, 252, 252)"
+    "rgba(255, 255, 255, 0.85)"
+
+
+topBarBackgroundGray =
+    "rgba(231, 231, 231, 0.9)"
+
+
+tobBarTextGray =
+    "rgba(0, 0, 0, 0.7)"
+
+
+selectionRectangleBorderBlue =
+    "rgba(38, 99, 218, 1)\n"
+
+
+selectionRectangleBackgroundBlue =
+    "rgba(38, 99, 218, 0.15)"
+
+
+selectedNodeBorder =
+    "rgba(38, 99, 218, 1)"

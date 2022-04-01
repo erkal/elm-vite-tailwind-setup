@@ -13,7 +13,7 @@ import Html.Events exposing (..)
 import Json.Decode as JD
 import Set exposing (Set)
 import Svg exposing (Svg, circle, defs, g, marker, path, polygon, rect, svg)
-import Svg.Attributes as SA exposing (cx, cy, d, fill, height, id, markerEnd, markerHeight, markerWidth, orient, points, r, refX, refY, stroke, strokeDasharray, strokeWidth, width, x, y)
+import Svg.Attributes as SA exposing (cx, cy, d, fill, height, id, markerEnd, markerHeight, markerWidth, orient, points, r, refX, refY, rx, ry, stroke, strokeDasharray, strokeWidth, width, x, y)
 import Task
 
 
@@ -416,16 +416,42 @@ viewNodeHtml model nodeId node =
         , style "width" (String.fromFloat node.width ++ "px")
         , style "height" (String.fromFloat node.height ++ "px")
         , style "background-color" Colors.nodeBackgroundWhite
-        , style "padding" "10px"
         , Html.Events.onMouseDown (MouseDownOnNode nodeId)
+        , style "border-radius" "12px"
+        , style "overflow" "hidden"
+        , style "box-shadow" "rgba(0, 0, 0, 0.24) 0px 3px 8px"
         , style "border" <|
             if Set.member nodeId model.selectedNodes then
-                "black solid 5px"
+                Colors.selectedNodeBorder ++ " solid"
 
             else
                 "none"
         ]
-        []
+        [ div
+            [ style "position" "absolute"
+            , style "width" "100%"
+            , style "height" "32px"
+            , style "background-color" Colors.topBarBackgroundGray
+
+            --
+            , style "font-family" "Roboto"
+            , style "font-size" "14px"
+            , style "font-weight" "400"
+            , style "line-height" "16px"
+            , style "letter-spacing" "0em"
+            , style "text-align" "left"
+            , style "color" Colors.tobBarTextGray
+            ]
+            [ div
+                [ style "position" "absolute"
+                , style "width" "184px"
+                , style "height" "16px"
+                , style "left" "28px"
+                , style "top" "8px"
+                ]
+                [ text "Basic" ]
+            ]
+        ]
 
 
 panAndZoomToDivTransform : Point -> Float -> String
@@ -506,10 +532,11 @@ viewSelectionRectangle model =
                 , y (String.fromFloat minY)
                 , width (String.fromFloat (maxX - minX))
                 , height (String.fromFloat (maxY - minY))
-                , fill "none"
-                , stroke "black"
-                , strokeWidth "2"
-                , strokeDasharray "5,5"
+                , fill Colors.selectionRectangleBackgroundBlue
+                , stroke Colors.selectionRectangleBorderBlue
+                , strokeWidth "1"
+                , rx "4"
+                , ry "4"
                 ]
                 []
 
