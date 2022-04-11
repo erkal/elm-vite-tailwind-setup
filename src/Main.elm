@@ -446,18 +446,22 @@ viewNodeHtml model nodeId node =
                 ]
 
         outEdgeCircle =
-            div
-                [ id (String.fromInt nodeId)
-                , class "out-edge-circle"
-                , style "position" "absolute"
-                , style "top" "50px"
-                , style "left" "226px"
-                , style "width" "10px"
-                , style "height" "10px"
-                , style "border-radius" "5px"
-                , style "background-color" Colors.edgeBlue
-                ]
-                []
+            if Dict.isEmpty node.outEdges then
+                div [] []
+
+            else
+                div
+                    [ id (String.fromInt nodeId)
+                    , class "out-edge-circle"
+                    , style "position" "absolute"
+                    , style "top" "50px"
+                    , style "left" "226px"
+                    , style "width" "10px"
+                    , style "height" "10px"
+                    , style "border-radius" "5px"
+                    , style "background-color" Colors.edgeBlue
+                    ]
+                    []
     in
     div
         [ style "position" "absolute"
