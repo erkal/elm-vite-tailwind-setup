@@ -314,7 +314,9 @@ update msg model =
                                     }
 
                                 delta =
-                                    Geometry.vectorFrom (toPoint newMousePosition) (toPoint mousePositionAtPanStart)
+                                    Geometry.vectorFrom
+                                        (toPoint newMousePosition)
+                                        (toPoint mousePositionAtPanStart)
                                         |> Geometry.scaleBy (1 / model.zoom)
                             in
                             panAtStart |> Geometry.translateBy delta
@@ -408,8 +410,7 @@ viewCanvas model =
 htmlCanvas : Model -> Html Msg
 htmlCanvas model =
     div
-        [ id "html-canvas"
-        , style "position" "absolute"
+        [ style "position" "absolute"
         , style "transform" (panAndZoomToDivTransform model.pan model.zoom)
         ]
         (model.flowGraph |> Dict.map (viewNodeHtml model) |> Dict.values)
