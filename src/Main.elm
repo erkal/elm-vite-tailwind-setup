@@ -1,20 +1,23 @@
-module Main exposing (main)
+port module Main exposing (main)
 
 import Browser
 import Browser.Dom as Dom
 import Browser.Events exposing (Visibility)
 import Colors
 import Dict
-import FlowGraph exposing (FlowGraph, Node, NodeId)
+import FlowGraph exposing (FlowGraph, Node, NodeId, OutEdgeDataFromPort)
 import Geometry exposing (Point)
 import Html exposing (Html, div, p, text)
-import Html.Attributes exposing (style)
+import Html.Attributes exposing (class, style)
 import Html.Events exposing (..)
 import Json.Decode as JD
 import Set exposing (Set)
 import Svg exposing (Svg, circle, defs, g, marker, path, polygon, rect, svg)
-import Svg.Attributes as SA exposing (cx, cy, d, fill, height, id, markerEnd, markerHeight, markerWidth, orient, points, r, refX, refY, rx, ry, stroke, strokeDasharray, strokeWidth, width, x, y)
+import Svg.Attributes as SA exposing (cx, cy, d, fill, height, id, markerEnd, markerHeight, markerWidth, orient, points, refX, refY, rx, ry, stroke, strokeWidth, width, x, y)
 import Task
+
+
+port outEdgeCircleCoordinatesForSvgPositioning : (OutEdgeDataFromPort -> msg) -> Sub msg
 
 
 main : Program () Model Msg
@@ -38,10 +41,11 @@ type Msg
     | MouseDownOnCanvas
     | KeyChanged Bool String
     | MouseUp
+    | FromPort_OutEdgeDataForSvgPositioning OutEdgeDataFromPort
 
 
 type alias Model =
-    { flowGraph : FlowGraph () ()
+    { flowGraph : FlowGraph
     , state : State
     , screenSize : { width : Int, height : Int }
     , pressedKeys : Set String
@@ -104,6 +108,7 @@ subscriptions model =
         , Browser.Events.onKeyDown (JD.map (KeyChanged True) (JD.field "key" JD.string))
         , Browser.Events.onResize WindowResized
         , Browser.Events.onVisibilityChange VisibilityChanged
+        , outEdgeCircleCoordinatesForSvgPositioning FromPort_OutEdgeDataForSvgPositioning
         ]
 
 
@@ -339,13 +344,20 @@ update msg model =
             , Cmd.none
             )
 
+        FromPort_OutEdgeDataForSvgPositioning outEdgeData ->
+            ( { model
+                | flowGraph = model.flowGraph |> FlowGraph.applyOutEdgeCoordinatesFromPort outEdgeData
+              }
+            , Cmd.none
+            )
+
 
 mouseOveredInEdgeJoint : Model -> Maybe NodeId
 mouseOveredInEdgeJoint model =
     model.flowGraph
         |> Dict.filter
             (\_ node ->
-                Geometry.distance (FlowGraph.inEdgeJointCoordinates node) model.svgMousePosition < 15
+                Geometry.distance (FlowGraph.inEdgeJointCoordinatesForSVGDrawing node) model.svgMousePosition < 15
             )
         |> Dict.keys
         |> List.head
@@ -356,7 +368,7 @@ mouseOveredOutEdgeJoint model =
     model.flowGraph
         |> Dict.filter
             (\_ node ->
-                Geometry.distance (FlowGraph.outEdgeJointCoordinates node) model.svgMousePosition < 15
+                Geometry.distance (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) model.svgMousePosition < 15
             )
         |> Dict.keys
         |> List.head
@@ -396,23 +408,59 @@ viewCanvas model =
 htmlCanvas : Model -> Html Msg
 htmlCanvas model =
     div
-        [ style "position" "absolute"
+        [ id "html-canvas"
+        , style "position" "absolute"
         , style "transform" (panAndZoomToDivTransform model.pan model.zoom)
         ]
         (model.flowGraph |> Dict.map (viewNodeHtml model) |> Dict.values)
 
 
-viewNodeHtml : Model -> NodeId -> Node () () -> Html Msg
+viewNodeHtml : Model -> NodeId -> Node -> Html Msg
 viewNodeHtml model nodeId node =
+    let
+        topBar =
+            div
+                [ style "position" "absolute"
+                , style "width" "100%"
+                , style "height" "32px"
+                , style "background-color" Colors.topBarBackgroundGray
+
+                --
+                , style "font-family" "Roboto"
+                , style "font-size" "14px"
+                , style "font-weight" "400"
+                , style "line-height" "16px"
+                , style "letter-spacing" "0em"
+                , style "text-align" "left"
+                , style "color" Colors.tobBarTextGray
+                ]
+                [ div
+                    [ style "position" "absolute"
+                    , style "width" "184px"
+                    , style "height" "16px"
+                    , style "left" "28px"
+                    , style "top" "8px"
+                    ]
+                    [ text "Basic" ]
+                ]
+
+        outEdgeCircle =
+            div
+                [ id (String.fromInt nodeId)
+                , class "out-edge-circle"
+                , style "position" "absolute"
+                , style "top" "50px"
+                , style "left" "226px"
+                , style "width" "10px"
+                , style "height" "10px"
+                , style "border-radius" "5px"
+                , style "background-color" Colors.edgeBlue
+                ]
+                []
+    in
     div
         [ style "position" "absolute"
-        , style "transform"
-            ("translate("
-                ++ String.fromFloat node.position.x
-                ++ "px,"
-                ++ String.fromFloat node.position.y
-                ++ "px)"
-            )
+        , style "transform" ("translate(" ++ String.fromFloat node.position.x ++ "px," ++ String.fromFloat node.position.y ++ "px)")
         , style "width" (String.fromFloat node.width ++ "px")
         , style "height" (String.fromFloat node.height ++ "px")
         , style "background-color" Colors.nodeBackgroundWhite
@@ -427,30 +475,8 @@ viewNodeHtml model nodeId node =
             else
                 "none"
         ]
-        [ div
-            [ style "position" "absolute"
-            , style "width" "100%"
-            , style "height" "32px"
-            , style "background-color" Colors.topBarBackgroundGray
-
-            --
-            , style "font-family" "Roboto"
-            , style "font-size" "14px"
-            , style "font-weight" "400"
-            , style "line-height" "16px"
-            , style "letter-spacing" "0em"
-            , style "text-align" "left"
-            , style "color" Colors.tobBarTextGray
-            ]
-            [ div
-                [ style "position" "absolute"
-                , style "width" "184px"
-                , style "height" "16px"
-                , style "left" "28px"
-                , style "top" "8px"
-                ]
-                [ text "Basic" ]
-            ]
+        [ topBar
+        , outEdgeCircle
         ]
 
 
@@ -462,14 +488,7 @@ panAndZoomToDivTransform pan zoom =
             , String.fromFloat -(pan.y * zoom)
             )
     in
-    "translate("
-        ++ translateX
-        ++ "px, "
-        ++ translateY
-        ++ "px) "
-        ++ "scale("
-        ++ String.fromFloat zoom
-        ++ ")"
+    "translate(" ++ translateX ++ "px, " ++ translateY ++ "px) " ++ "scale(" ++ String.fromFloat zoom ++ ")"
 
 
 panAndZoomToSvgViewBox : Model -> String
@@ -564,7 +583,7 @@ viewDraggedEdge model =
             Dict.get sourceId model.flowGraph
                 |> Maybe.map
                     (\node ->
-                        viewEdgeSvg (FlowGraph.outEdgeJointCoordinates node) model.svgMousePosition
+                        viewEdgeSvg (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) model.svgMousePosition
                     )
                 |> Maybe.withDefault (g [] [])
 
@@ -631,7 +650,7 @@ viewEdgeSvg startPoint endPoint =
     curvedLine
 
 
-viewNodeSvg : Model -> NodeId -> Node () () -> Svg Msg
+viewNodeSvg : Model -> NodeId -> Node -> Svg Msg
 viewNodeSvg model nodeId node =
     let
         viewEdgeSvg_ target _ =
@@ -639,9 +658,9 @@ viewNodeSvg model nodeId node =
                 endPoint =
                     model.flowGraph
                         |> Dict.get target
-                        |> Maybe.map FlowGraph.inEdgeJointCoordinates
+                        |> Maybe.map FlowGraph.inEdgeJointCoordinatesForSVGDrawing
                         |> Maybe.withDefault { x = 0, y = 0 }
             in
-            viewEdgeSvg (FlowGraph.outEdgeJointCoordinates node) endPoint
+            viewEdgeSvg (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) endPoint
     in
     g [] (node.outEdges |> Dict.map viewEdgeSvg_ |> Dict.values)

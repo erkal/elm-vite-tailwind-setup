@@ -5,18 +5,18 @@ import Geometry exposing (BoundingBox, Point)
 import Set exposing (Set)
 
 
-type alias FlowGraph n e =
-    Dict NodeId (Node n e)
+type alias FlowGraph =
+    Dict NodeId Node
 
 
 type alias NodeId =
     Int
 
 
-type alias Node n e =
-    { nodeData : n
-    , outEdges : Dict NodeId e
+type alias Node =
+    { outEdges : Dict NodeId Float
 
+    {- `offsetTop` value for positioning the svg edges -}
     --
     , position : Point
     , width : Float
@@ -24,26 +24,25 @@ type alias Node n e =
     }
 
 
-empty : FlowGraph n e
+empty : FlowGraph
 empty =
     Dict.empty
 
 
-exampleGraph : FlowGraph () ()
+exampleGraph : FlowGraph
 exampleGraph =
     let
         makeNode pos nodeId edgeTargets =
             ( nodeId
-            , { nodeData = ()
-              , outEdges =
+            , { outEdges =
                     edgeTargets
-                        |> List.map (\target -> ( target, () ))
+                        |> List.map (\target -> ( target, 0 ))
                         |> Dict.fromList
 
               --
               , position = pos
               , width = 240
-              , height = 100
+              , height = 160
               }
             )
     in
@@ -55,17 +54,7 @@ exampleGraph =
         ]
 
 
-outEdgeJointCoordinates : Node n e -> Point
-outEdgeJointCoordinates node =
-    node.position |> Geometry.translateBy ( node.width, 0.5 * node.height )
-
-
-inEdgeJointCoordinates : Node n e -> Point
-inEdgeJointCoordinates node =
-    node.position |> Geometry.translateBy ( 0, 16 )
-
-
-moveNodes : List ( NodeId, Point ) -> FlowGraph () () -> FlowGraph () ()
+moveNodes : List ( NodeId, Point ) -> FlowGraph -> FlowGraph
 moveNodes l flowGraph =
     l
         |> List.foldl
@@ -73,14 +62,14 @@ moveNodes l flowGraph =
             flowGraph
 
 
-insertEdge : NodeId -> NodeId -> e -> FlowGraph n e -> FlowGraph n e
+insertEdge : NodeId -> NodeId -> e -> FlowGraph -> FlowGraph
 insertEdge sourceId targetId edge flowGraph =
     flowGraph
         |> Dict.update sourceId
-            (Maybe.map (\node -> { node | outEdges = node.outEdges |> Dict.insert targetId edge }))
+            (Maybe.map (\node -> { node | outEdges = node.outEdges |> Dict.insert targetId e }))
 
 
-boundingBox : Node n e -> BoundingBox
+boundingBox : Node -> BoundingBox
 boundingBox node =
     { minX = node.position.x
     , maxX = node.position.x + node.width
@@ -89,14 +78,14 @@ boundingBox node =
     }
 
 
-inducedSubgraph : Set NodeId -> FlowGraph n e -> FlowGraph n e
+inducedSubgraph : Set NodeId -> FlowGraph -> FlowGraph
 inducedSubgraph nodeIds flowGraph =
     flowGraph
         |> Dict.filter (\nodeId _ -> Set.member nodeId nodeIds)
         |> Dict.map (\_ node -> { node | outEdges = node.outEdges |> Dict.filter (\nodeId _ -> Set.member nodeId nodeIds) })
 
 
-duplicateSubgraph : Set NodeId -> FlowGraph n e -> ( FlowGraph n e, List NodeId )
+duplicateSubgraph : Set NodeId -> FlowGraph -> ( FlowGraph, List NodeId )
 duplicateSubgraph nodeIds flowGraph =
     let
         maxNodeId : NodeId
@@ -124,7 +113,12 @@ duplicateSubgraph nodeIds flowGraph =
                             | outEdges =
                                 node.outEdges
                                     |> Dict.toList
-                                    |> List.map (Tuple.mapFirst (\nodeId_ -> Dict.get nodeId_ newNodeIds |> Maybe.withDefault 0))
+                                    |> List.map
+                                        (\( nodeId_, y ) ->
+                                            ( Dict.get nodeId_ newNodeIds |> Maybe.withDefault 0
+                                            , y
+                                            )
+                                        )
                                     |> Dict.fromList
                         }
                     )
@@ -133,3 +127,53 @@ duplicateSubgraph nodeIds flowGraph =
         )
     , Dict.values newNodeIds
     )
+
+
+type alias OutEdgeDataFromPort =
+    List
+        { id : String
+        , offsetTop : Float
+        }
+
+
+
+-- Set and get data for edge joints in order to position the svg edges correctly
+
+
+applyOutEdgeCoordinatesFromPort : OutEdgeDataFromPort -> FlowGraph -> FlowGraph
+applyOutEdgeCoordinatesFromPort outEdgeDataFromPort flowGraph =
+    outEdgeDataFromPort
+        |> List.foldl
+            (\{ id, offsetTop } acc ->
+                let
+                    nodeId =
+                        id |> String.toInt |> Maybe.withDefault 0
+                in
+                acc
+                    |> Dict.update nodeId
+                        (Maybe.map
+                            (\node ->
+                                { node
+                                    | outEdges =
+                                        node.outEdges
+                                            |> Dict.map
+                                                (\_ _ -> offsetTop + 5 {- 5 is the radius of the circle -})
+                                }
+                            )
+                        )
+            )
+            flowGraph
+
+
+outEdgeJointCoordinatesForSVGDrawing : Node -> Point
+outEdgeJointCoordinatesForSVGDrawing node =
+    node.position
+        |> Geometry.translateBy
+            ( node.width
+            , node.outEdges |> Dict.values |> List.head |> Maybe.withDefault 0
+            )
+
+
+inEdgeJointCoordinatesForSVGDrawing : Node -> Point
+inEdgeJointCoordinatesForSVGDrawing node =
+    node.position |> Geometry.translateBy ( 0, 16 )
