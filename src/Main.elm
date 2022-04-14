@@ -429,10 +429,11 @@ viewNodeHtml model nodeId node =
         , style "overflow" "hidden"
         , style "outline" <|
             if Set.member nodeId model.selectedNodes then
-                Colors.selectedNodeBorder ++ "solid 1px"
+                Colors.selectedNodeBorder ++ " 1px solid"
 
             else
                 "none"
+        , style "outline-offset" "-1px"
 
         --, style "box-shadow" "rgba(0, 0, 0, 0.24) 0px 3px 8px"
         ]
@@ -485,11 +486,11 @@ viewNodeHtml model nodeId node =
                         [ d
                             (String.concat
                                 [ "M 0 0"
-                                , "L 16 0"
+                                , "L 15.5 0"
                                 , "A 8 8 90 0 1 8 8"
-                                , "A 8 8 90 0 0 0 16"
+                                , "A 8 8 90 0 0 0.5 16"
                                 , "A 8 8 90 0 0 8 24"
-                                , "A 8 8 90 0 1 16 32"
+                                , "A 8 8 90 0 1 15.5 32"
                                 , "L 0 32"
                                 ]
                             )
