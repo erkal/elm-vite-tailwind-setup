@@ -418,82 +418,6 @@ htmlCanvas model =
 
 viewNodeHtml : Model -> NodeId -> Node -> Html Msg
 viewNodeHtml model nodeId node =
-    let
-        topBar =
-            div
-                [ style "position" "absolute"
-                , style "width" "100%"
-                , style "height" "32px"
-                , style "background-color" Colors.topBarBackgroundGray
-
-                --
-                , style "font-family" "Roboto"
-                , style "font-size" "14px"
-                , style "font-weight" "400"
-                , style "line-height" "16px"
-                , style "letter-spacing" "0em"
-                , style "text-align" "left"
-                , style "color" Colors.tobBarTextGray
-                ]
-                [ div
-                    [ style "position" "absolute"
-                    , style "width" "184px"
-                    , style "height" "16px"
-                    , style "left" "28px"
-                    , style "top" "8px"
-                    ]
-                    [ text "Basic" ]
-                ]
-
-        outEdgeCircle =
-            if Dict.isEmpty node.outEdges then
-                div [] []
-
-            else
-                let
-                    circleWithLine =
-                        g [ transform "translate(8,16)" ]
-                            [ line [ x1 "0", y1 "0", x2 "8", y2 "0", strokeWidth "1", stroke Colors.edgeBlue ] []
-                            , circle [ rx "5", ry "5", r "5", fill Colors.edgeBlue ] []
-                            , circle [ rx "5", ry "5", r "4.5", fill "none", strokeWidth "1", stroke "rgba(0, 0, 0, 0.2)" ] []
-                            ]
-
-                    edjeJointBackground =
-                        path
-                            [ d
-                                (String.concat
-                                    [ "M 0 0"
-                                    , "L 16 0"
-                                    , "A 8 8 90 0 1 8 8"
-                                    , "A 8 8 90 0 0 0 16"
-                                    , "A 8 8 90 0 0 8 24"
-                                    , "A 8 8 90 0 1 16 32"
-                                    , "L 0 32"
-                                    ]
-                                )
-                            , fill Colors.nodeBackgroundWhite
-                            ]
-                            []
-                in
-                div
-                    [ id (String.fromInt nodeId)
-                    , class "out-edge-circle"
-                    , style "position" "absolute"
-                    , style "top" "50px"
-                    , style "left" "224px"
-                    , style "width" "16px"
-                    , style "height" "32px"
-                    , style "background-color" Colors.backgroundGray
-                    ]
-                    [ svg
-                        [ width "16px"
-                        , height "32px"
-                        ]
-                        [ edjeJointBackground
-                        , circleWithLine
-                        ]
-                    ]
-    in
     div
         [ style "position" "absolute"
         , style "transform" ("translate(" ++ String.fromFloat node.position.x ++ "px," ++ String.fromFloat node.position.y ++ "px)")
@@ -505,15 +429,89 @@ viewNodeHtml model nodeId node =
         , style "overflow" "hidden"
         , style "outline" <|
             if Set.member nodeId model.selectedNodes then
-                Colors.selectedNodeBorder ++ " solid"
+                Colors.selectedNodeBorder ++ "solid 1px"
 
             else
                 "none"
 
         --, style "box-shadow" "rgba(0, 0, 0, 0.24) 0px 3px 8px"
         ]
-        [ topBar
-        , outEdgeCircle
+        [ {- top bar -}
+          div
+            [ style "position" "absolute"
+            , style "width" "100%"
+            , style "height" "32px"
+            , style "background-color" Colors.topBarBackgroundGray
+
+            --
+            , style "font-family" "Roboto"
+            , style "font-size" "14px"
+            , style "font-weight" "400"
+            , style "line-height" "16px"
+            , style "letter-spacing" "0em"
+            , style "text-align" "left"
+            , style "color" Colors.tobBarTextGray
+            ]
+            [ div
+                [ style "position" "absolute"
+                , style "width" "184px"
+                , style "height" "16px"
+                , style "left" "28px"
+                , style "top" "8px"
+                ]
+                [ text "Basic" ]
+            ]
+        , {- edge joint -}
+          if Dict.isEmpty node.outEdges then
+            div [] []
+
+          else
+            div
+                [ id (String.fromInt nodeId)
+                , class "out-edge-circle"
+                , style "position" "absolute"
+                , style "top" "50px"
+                , style "left" "224px"
+                , style "width" "16px"
+                , style "height" "32px"
+                , style "background-color" Colors.backgroundGray
+                ]
+                [ svg
+                    [ width "16px"
+                    , height "32px"
+                    ]
+                    [ {- edje joint background -}
+                      path
+                        [ d
+                            (String.concat
+                                [ "M 0 0"
+                                , "L 16 0"
+                                , "A 8 8 90 0 1 8 8"
+                                , "A 8 8 90 0 0 0 16"
+                                , "A 8 8 90 0 0 8 24"
+                                , "A 8 8 90 0 1 16 32"
+                                , "L 0 32"
+                                ]
+                            )
+                        , fill Colors.nodeBackgroundWhite
+                        , stroke Colors.selectionRectangleBorderBlue
+                        , strokeWidth <|
+                            if Set.member nodeId model.selectedNodes then
+                                Colors.selectedNodeBorder ++ "1"
+
+                            else
+                                "0"
+                        ]
+                        []
+                    , {- circle with line -}
+                      g
+                        [ transform "translate(8,16)" ]
+                        [ line [ x1 "0", y1 "0", x2 "8", y2 "0", strokeWidth "1", stroke Colors.edgeBlue ] []
+                        , circle [ rx "5", ry "5", r "5", fill Colors.edgeBlue ] []
+                        , circle [ rx "5", ry "5", r "4.5", fill "none", strokeWidth "1", stroke "rgba(0, 0, 0, 0.2)" ] []
+                        ]
+                    ]
+                ]
         ]
 
 
