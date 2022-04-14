@@ -13,7 +13,7 @@ import Html.Events exposing (..)
 import Json.Decode as JD
 import Set exposing (Set)
 import Svg exposing (Svg, circle, defs, g, line, marker, path, polygon, rect, svg)
-import Svg.Attributes as SA exposing (cx, cy, d, fill, height, id, markerEnd, markerHeight, markerWidth, orient, points, r, refX, refY, rx, ry, stroke, strokeWidth, transform, width, x, x1, x2, y, y1, y2)
+import Svg.Attributes as SA exposing (cursor, cx, cy, d, fill, height, id, markerEnd, markerHeight, markerWidth, orient, points, r, refX, refY, rx, ry, stroke, strokeWidth, transform, width, x, x1, x2, y, y1, y2)
 import Task
 
 
@@ -38,6 +38,8 @@ type Msg
     | MouseMove MousePosition
     | MouseDownOnBackgroundRectangle
     | MouseDownOnNode NodeId
+    | MouseDownOnOutEdgeJoint NodeId
+    | MouseDownOnTopBar NodeId
     | MouseDownOnCanvas
     | KeyChanged Bool String
     | MouseUp
@@ -173,18 +175,48 @@ update msg model =
             , Cmd.none
             )
 
+        MouseDownOnOutEdgeJoint nodeId ->
+            ( { model
+                | state = DrawingEdge { sourceId = nodeId }
+              }
+            , Cmd.none
+            )
+
+        MouseDownOnTopBar nodeId ->
+            ( { model
+                | state =
+                    DraggingNodes
+                        { mousePositionAtDragStart = model.svgMousePosition
+                        , nodePositionsAtStart =
+                            (if Set.member nodeId model.selectedNodes then
+                                Set.toList model.selectedNodes
+
+                             else
+                                [ nodeId ]
+                            )
+                                |> List.map
+                                    (\nodeId_ ->
+                                        model.flowGraph
+                                            |> Dict.get nodeId_
+                                            |> Maybe.map .position
+                                            |> Maybe.withDefault { x = 0, y = 0 }
+                                            |> (\position -> ( nodeId_, position ))
+                                    )
+                        }
+                , selectedNodes =
+                    if Set.member nodeId model.selectedNodes then
+                        model.selectedNodes
+
+                    else
+                        Set.empty
+              }
+            , Cmd.none
+            )
+
         MouseDownOnCanvas ->
             ( { model
                 | state =
-                    if Set.member "e" model.pressedKeys then
-                        case mouseOveredOutEdgeJoint model of
-                            Just nodeId ->
-                                DrawingEdge { sourceId = nodeId }
-
-                            _ ->
-                                model.state
-
-                    else if Set.member "s" model.pressedKeys then
+                    if Set.member "s" model.pressedKeys then
                         BrushingSelectionRectangle { mousePositionAtBrushStart = model.svgMousePosition }
 
                     else
@@ -233,33 +265,7 @@ update msg model =
                 }
 
               else
-                { model
-                    | state =
-                        DraggingNodes
-                            { mousePositionAtDragStart = model.svgMousePosition
-                            , nodePositionsAtStart =
-                                (if Set.member nodeId model.selectedNodes then
-                                    Set.toList model.selectedNodes
-
-                                 else
-                                    [ nodeId ]
-                                )
-                                    |> List.map
-                                        (\nodeId_ ->
-                                            model.flowGraph
-                                                |> Dict.get nodeId_
-                                                |> Maybe.map .position
-                                                |> Maybe.withDefault { x = 0, y = 0 }
-                                                |> (\position -> ( nodeId_, position ))
-                                        )
-                            }
-                    , selectedNodes =
-                        if Set.member nodeId model.selectedNodes then
-                            model.selectedNodes
-
-                        else
-                            Set.empty
-                }
+                model
             , Cmd.none
             )
 
@@ -380,10 +386,9 @@ view : Model -> Html Msg
 view model =
     div []
         [ div [ style "position" "absolute", style "margin" "10px" ]
-            [ p [] [ text "Select/Deselect nodes: `Shift` + click" ]
-            , p [] [ text "Drawing edges: hold the `e` key down and drag" ]
+            [ p [] [ text "Add/remove nodes from selection: `Shift` + click" ]
             , p [] [ text "Brushing a selection: hold the `s` key down and drag" ]
-            , p [] [ text "Duplicating a selection: hold the `Alt` key down and drag" ]
+            , p [] [ text "Duplicating a selection: hold the `Alt` key down and drage" ]
             ]
         , div [ style "position" "absolute", style "margin" "10px", style "bottom" "0px" ]
             [ p [] [ text ("`state`: " ++ Debug.toString model.state) ]
@@ -401,6 +406,16 @@ viewCanvas model =
         , style "overflow" "hidden"
         , Html.Events.onMouseDown MouseDownOnCanvas
         , Html.Events.on "wheel" (JD.map WheelDeltaY (JD.field "deltaY" JD.int))
+        , style "cursor" <|
+            case model.state of
+                DraggingNodes _ ->
+                    "grabbing"
+
+                DrawingEdge _ ->
+                    "grabbing"
+
+                _ ->
+                    "default"
         ]
         [ htmlCanvas model
         , svgCanvas model
@@ -418,6 +433,104 @@ htmlCanvas model =
 
 viewNodeHtml : Model -> NodeId -> Node -> Html Msg
 viewNodeHtml model nodeId node =
+    let
+        topBar =
+            div
+                [ style "position" "absolute"
+                , style "width" "100%"
+                , style "height" "32px"
+                , style "background-color" Colors.topBarBackgroundGray
+
+                --
+                , style "font-family" "Roboto"
+                , style "font-size" "14px"
+                , style "font-weight" "400"
+                , style "line-height" "16px"
+                , style "letter-spacing" "0em"
+                , style "text-align" "left"
+                , style "color" Colors.tobBarTextGray
+                , style "cursor" <|
+                    case model.state of
+                        DraggingNodes _ ->
+                            "grabbing"
+
+                        DrawingEdge _ ->
+                            "grabbing"
+
+                        _ ->
+                            "grab"
+                , onMouseDown (MouseDownOnTopBar nodeId)
+                ]
+                [ div
+                    [ style "position" "absolute"
+                    , style "width" "184px"
+                    , style "height" "16.5px"
+                    , style "left" "28px"
+                    , style "top" "8px"
+                    ]
+                    [ text "Basic" ]
+                ]
+
+        edgJointBackground =
+            path
+                [ d
+                    (String.concat
+                        [ "M -1 -1"
+                        , "L 15.5 -1"
+                        , "L 15.5 0"
+                        , "A 8 8 90 0 1 8 8"
+                        , "A 8 8 90 0 0 1 16"
+                        , "A 8 8 90 0 0 8 24"
+                        , "A 8 8 90 0 1 15.5 32.5"
+                        , "L 15.5 33"
+                        , "L -1 33"
+                        ]
+                    )
+                , fill Colors.nodeBackgroundWhite
+                , stroke Colors.selectionRectangleBorderBlue
+                , strokeWidth <|
+                    if Set.member nodeId model.selectedNodes then
+                        Colors.selectedNodeBorder ++ "1"
+
+                    else
+                        "0"
+                ]
+                []
+
+        circleWithLine =
+            g
+                [ transform "translate(8,16)"
+                , onMouseDown (MouseDownOnOutEdgeJoint nodeId)
+                ]
+                [ line [ x1 "0", y1 "0", x2 "8", y2 "0", strokeWidth "1", stroke Colors.edgeBlue ] []
+                , circle [ rx "5", ry "5", r "5", fill Colors.edgeBlue, cursor "pointer" ] []
+                , circle [ rx "5", ry "5", r "4.5", fill "none", strokeWidth "1", stroke "rgba(0, 0, 0, 0.2)" ] []
+                ]
+
+        edgeJoint =
+            if Dict.isEmpty node.outEdges then
+                div [] []
+
+            else
+                div
+                    [ id (String.fromInt nodeId)
+                    , class "out-edge-circle"
+                    , style "position" "absolute"
+                    , style "top" "50px"
+                    , style "left" "224px"
+                    , style "width" "16px"
+                    , style "height" "32px"
+                    , style "background-color" Colors.backgroundGray
+                    ]
+                    [ svg
+                        [ width "16px"
+                        , height "32px"
+                        ]
+                        [ edgJointBackground
+                        , circleWithLine
+                        ]
+                    ]
+    in
     div
         [ style "position" "absolute"
         , style "transform" ("translate(" ++ String.fromFloat node.position.x ++ "px," ++ String.fromFloat node.position.y ++ "px)")
@@ -437,82 +550,8 @@ viewNodeHtml model nodeId node =
 
         --, style "box-shadow" "rgba(0, 0, 0, 0.24) 0px 3px 8px"
         ]
-        [ {- top bar -}
-          div
-            [ style "position" "absolute"
-            , style "width" "100%"
-            , style "height" "32px"
-            , style "background-color" Colors.topBarBackgroundGray
-
-            --
-            , style "font-family" "Roboto"
-            , style "font-size" "14px"
-            , style "font-weight" "400"
-            , style "line-height" "16px"
-            , style "letter-spacing" "0em"
-            , style "text-align" "left"
-            , style "color" Colors.tobBarTextGray
-            ]
-            [ div
-                [ style "position" "absolute"
-                , style "width" "184px"
-                , style "height" "16px"
-                , style "left" "28px"
-                , style "top" "8px"
-                ]
-                [ text "Basic" ]
-            ]
-        , {- edge joint -}
-          if Dict.isEmpty node.outEdges then
-            div [] []
-
-          else
-            div
-                [ id (String.fromInt nodeId)
-                , class "out-edge-circle"
-                , style "position" "absolute"
-                , style "top" "50px"
-                , style "left" "224px"
-                , style "width" "16px"
-                , style "height" "32px"
-                , style "background-color" Colors.backgroundGray
-                ]
-                [ svg
-                    [ width "16px"
-                    , height "32px"
-                    ]
-                    [ {- edje joint background -}
-                      path
-                        [ d
-                            (String.concat
-                                [ "M 0 0"
-                                , "L 15.5 0"
-                                , "A 8 8 90 0 1 8 8"
-                                , "A 8 8 90 0 0 0.5 16"
-                                , "A 8 8 90 0 0 8 24"
-                                , "A 8 8 90 0 1 15.5 32"
-                                , "L 0 32"
-                                ]
-                            )
-                        , fill Colors.nodeBackgroundWhite
-                        , stroke Colors.selectionRectangleBorderBlue
-                        , strokeWidth <|
-                            if Set.member nodeId model.selectedNodes then
-                                Colors.selectedNodeBorder ++ "1"
-
-                            else
-                                "0"
-                        ]
-                        []
-                    , {- circle with line -}
-                      g
-                        [ transform "translate(8,16)" ]
-                        [ line [ x1 "0", y1 "0", x2 "8", y2 "0", strokeWidth "1", stroke Colors.edgeBlue ] []
-                        , circle [ rx "5", ry "5", r "5", fill Colors.edgeBlue ] []
-                        , circle [ rx "5", ry "5", r "4.5", fill "none", strokeWidth "1", stroke "rgba(0, 0, 0, 0.2)" ] []
-                        ]
-                    ]
-                ]
+        [ topBar
+        , edgeJoint
         ]
 
 

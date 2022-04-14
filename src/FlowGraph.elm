@@ -161,7 +161,7 @@ outEdgeJointCoordinatesForSVGDrawing node =
     node.position
         |> Geometry.translateBy
             ( node.width
-            , node.outEdges |> Dict.values |> List.head |> Maybe.withDefault 0
+            , 16 + (node.outEdges |> Dict.values |> List.head |> Maybe.withDefault 0)
             )
 
 
