@@ -371,17 +371,6 @@ mouseOveredInEdgeJoint model =
         |> List.head
 
 
-mouseOveredOutEdgeJoint : Model -> Maybe NodeId
-mouseOveredOutEdgeJoint model =
-    model.flowGraph
-        |> Dict.filter
-            (\_ node ->
-                Geometry.distance (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) model.svgMousePosition < 15
-            )
-        |> Dict.keys
-        |> List.head
-
-
 view : Model -> Html Msg
 view model =
     div []
