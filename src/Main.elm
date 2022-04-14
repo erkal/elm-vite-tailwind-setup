@@ -12,8 +12,8 @@ import Html.Attributes exposing (class, style)
 import Html.Events exposing (..)
 import Json.Decode as JD
 import Set exposing (Set)
-import Svg exposing (Svg, circle, defs, g, marker, path, polygon, rect, svg)
-import Svg.Attributes as SA exposing (cx, cy, d, fill, height, id, markerEnd, markerHeight, markerWidth, orient, points, refX, refY, rx, ry, stroke, strokeWidth, width, x, y)
+import Svg exposing (Svg, circle, defs, g, line, marker, path, polygon, rect, svg)
+import Svg.Attributes as SA exposing (cx, cy, d, fill, height, id, markerEnd, markerHeight, markerWidth, orient, points, r, refX, refY, rx, ry, stroke, strokeWidth, transform, width, x, x1, x2, y, y1, y2)
 import Task
 
 
@@ -450,18 +450,49 @@ viewNodeHtml model nodeId node =
                 div [] []
 
             else
+                let
+                    circleWithLine =
+                        g [ transform "translate(8,16)" ]
+                            [ line [ x1 "0", y1 "0", x2 "8", y2 "0", strokeWidth "1", stroke Colors.edgeBlue ] []
+                            , circle [ rx "5", ry "5", r "5", fill Colors.edgeBlue ] []
+                            , circle [ rx "5", ry "5", r "4.5", fill "none", strokeWidth "1", stroke "rgba(0, 0, 0, 0.2)" ] []
+                            ]
+
+                    edjeJointBackground =
+                        path
+                            [ d
+                                (String.concat
+                                    [ "M 0 0"
+                                    , "L 16 0"
+                                    , "A 8 8 90 0 1 8 8"
+                                    , "A 8 8 90 0 0 0 16"
+                                    , "A 8 8 90 0 0 8 24"
+                                    , "A 8 8 90 0 1 16 32"
+                                    , "L 0 32"
+                                    ]
+                                )
+                            , fill Colors.nodeBackgroundWhite
+                            ]
+                            []
+                in
                 div
                     [ id (String.fromInt nodeId)
                     , class "out-edge-circle"
                     , style "position" "absolute"
                     , style "top" "50px"
-                    , style "left" "226px"
-                    , style "width" "10px"
-                    , style "height" "10px"
-                    , style "border-radius" "5px"
-                    , style "background-color" Colors.edgeBlue
+                    , style "left" "224px"
+                    , style "width" "16px"
+                    , style "height" "32px"
+                    , style "background-color" Colors.backgroundGray
                     ]
-                    []
+                    [ svg
+                        [ width "16px"
+                        , height "32px"
+                        ]
+                        [ edjeJointBackground
+                        , circleWithLine
+                        ]
+                    ]
     in
     div
         [ style "position" "absolute"
@@ -472,13 +503,14 @@ viewNodeHtml model nodeId node =
         , Html.Events.onMouseDown (MouseDownOnNode nodeId)
         , style "border-radius" "12px"
         , style "overflow" "hidden"
-        , style "box-shadow" "rgba(0, 0, 0, 0.24) 0px 3px 8px"
-        , style "border" <|
+        , style "outline" <|
             if Set.member nodeId model.selectedNodes then
                 Colors.selectedNodeBorder ++ " solid"
 
             else
                 "none"
+
+        --, style "box-shadow" "rgba(0, 0, 0, 0.24) 0px 3px 8px"
         ]
         [ topBar
         , outEdgeCircle
@@ -658,7 +690,7 @@ viewEdgeSvg startPoint endPoint =
 viewNodeSvg : Model -> NodeId -> Node -> Svg Msg
 viewNodeSvg model nodeId node =
     let
-        viewEdgeSvg_ target _ =
+        viewEdge target _ =
             let
                 endPoint =
                     model.flowGraph
@@ -668,4 +700,4 @@ viewNodeSvg model nodeId node =
             in
             viewEdgeSvg (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) endPoint
     in
-    g [] (node.outEdges |> Dict.map viewEdgeSvg_ |> Dict.values)
+    g [] (node.outEdges |> Dict.map viewEdge |> Dict.values)

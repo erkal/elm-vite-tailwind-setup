@@ -151,16 +151,7 @@ applyOutEdgeCoordinatesFromPort outEdgeDataFromPort flowGraph =
                 in
                 acc
                     |> Dict.update nodeId
-                        (Maybe.map
-                            (\node ->
-                                { node
-                                    | outEdges =
-                                        node.outEdges
-                                            |> Dict.map
-                                                (\_ _ -> offsetTop + 5 {- 5 is the radius of the circle -})
-                                }
-                            )
-                        )
+                        (Maybe.map (\node -> { node | outEdges = node.outEdges |> Dict.map (\_ _ -> offsetTop) }))
             )
             flowGraph
 
