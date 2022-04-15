@@ -114,76 +114,180 @@ subscriptions model =
         ]
 
 
+
+-- UPDATE
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    ( model
+        |> setScreenSizeFromInitCmd msg
+        |> resetKeyboardOnVisibilityChange msg
+        |> updateScreenSizeOnWindowResize msg
+        |> updateMousePosition msg
+        |> updateKeyboard msg
+        --
+        |> updateOutEdgeCoordinatesWithDataComingFromPort msg
+        --
+        |> zoomInAndOut msg
+        --
+        |> startPanning msg
+        |> dragPan msg
+        |> finishPanning msg
+        --
+        |> startDrawingEdge msg
+        |> finishDrawingEdge msg
+        --
+        |> startDraggingNodes msg
+        |> startCopyDraggingSelectedNodes msg
+        |> dragNodes msg
+        |> finishDraggingNodes msg
+        --
+        |> startBrushingSelectionRectangle msg
+        |> brushSelectionRectangle msg
+        |> finishBrushingSelectionRectangle msg
+        --
+        |> addNodeToSelectionOrRemoveNodeFromSelection msg
+    , Cmd.none
+    )
+
+
+setScreenSizeFromInitCmd : Msg -> Model -> Model
+setScreenSizeFromInitCmd msg model =
     case msg of
         GotViewport { viewport } ->
-            ( { model
+            { model
                 | screenSize = { width = round viewport.width, height = round viewport.height }
-              }
-            , Cmd.none
-            )
+            }
 
+        _ ->
+            model
+
+
+resetKeyboardOnVisibilityChange : Msg -> Model -> Model
+resetKeyboardOnVisibilityChange msg model =
+    case msg of
         VisibilityChanged visibility ->
-            ( { model | pressedKeys = Set.empty }
-            , Cmd.none
-            )
+            { model | pressedKeys = Set.empty }
 
+        _ ->
+            model
+
+
+updateScreenSizeOnWindowResize : Msg -> Model -> Model
+updateScreenSizeOnWindowResize msg model =
+    case msg of
         WindowResized width height ->
-            ( { model
+            { model
                 | screenSize = { width = width, height = height }
-              }
-            , Cmd.none
-            )
+            }
 
+        _ ->
+            model
+
+
+zoomInAndOut : Msg -> Model -> Model
+zoomInAndOut msg model =
+    case msg of
         WheelDeltaY deltaY ->
             let
                 newZoom =
                     (model.zoom + 0.0005 * toFloat -deltaY)
                         |> clamp 0.25 1
             in
-            ( { model
+            { model
                 | zoom = newZoom
                 , pan =
                     model.pan
                         |> Geometry.scaleAbout model.svgMousePosition (model.zoom / newZoom)
-              }
-            , Cmd.none
-            )
+            }
 
+        _ ->
+            model
+
+
+updateKeyboard : Msg -> Model -> Model
+updateKeyboard msg model =
+    case msg of
         KeyChanged isDown key ->
-            ( { model
+            { model
                 | pressedKeys =
                     if isDown then
                         Set.insert key model.pressedKeys
 
                     else
                         Set.remove key model.pressedKeys
-              }
-            , Cmd.none
-            )
+            }
 
+        _ ->
+            model
+
+
+startPanning : Msg -> Model -> Model
+startPanning msg model =
+    case msg of
         MouseDownOnBackgroundRectangle ->
-            ( { model
+            { model
                 | state =
                     Panning
                         { mousePositionAtPanStart = model.mousePosition
                         , panAtStart = model.pan
                         }
                 , selectedNodes = Set.empty
-              }
-            , Cmd.none
-            )
+            }
 
+        _ ->
+            model
+
+
+dragPan : Msg -> Model -> Model
+dragPan msg model =
+    case msg of
+        MouseMove newMousePosition ->
+            { model
+                | pan =
+                    case model.state of
+                        Panning { mousePositionAtPanStart, panAtStart } ->
+                            let
+                                toPoint : MousePosition -> Point
+                                toPoint pos =
+                                    { x = toFloat pos.x
+                                    , y = toFloat pos.y
+                                    }
+
+                                delta =
+                                    Geometry.vectorFrom
+                                        (toPoint newMousePosition)
+                                        (toPoint mousePositionAtPanStart)
+                                        |> Geometry.scaleBy (1 / model.zoom)
+                            in
+                            panAtStart |> Geometry.translateBy delta
+
+                        _ ->
+                            model.pan
+            }
+
+        _ ->
+            model
+
+
+startDrawingEdge : Msg -> Model -> Model
+startDrawingEdge msg model =
+    case msg of
         MouseDownOnOutEdgeJoint nodeId ->
-            ( { model
+            { model
                 | state = DrawingEdge { sourceId = nodeId }
-              }
-            , Cmd.none
-            )
+            }
 
+        _ ->
+            model
+
+
+startDraggingNodes : Msg -> Model -> Model
+startDraggingNodes msg model =
+    case msg of
         MouseDownOnTopBar nodeId ->
-            ( { model
+            { model
                 | state =
                     DraggingNodes
                         { mousePositionAtDragStart = model.svgMousePosition
@@ -209,76 +313,35 @@ update msg model =
 
                     else
                         Set.empty
-              }
-            , Cmd.none
-            )
+            }
 
+        _ ->
+            model
+
+
+startBrushingSelectionRectangle : Msg -> Model -> Model
+startBrushingSelectionRectangle msg model =
+    case msg of
         MouseDownOnCanvas ->
-            ( { model
+            { model
                 | state =
                     if Set.member "s" model.pressedKeys then
                         BrushingSelectionRectangle { mousePositionAtBrushStart = model.svgMousePosition }
 
                     else
                         model.state
-              }
-            , Cmd.none
-            )
+            }
 
-        MouseDownOnNode nodeId ->
-            ( if Set.member "Shift" model.pressedKeys then
-                { model
-                    | selectedNodes =
-                        if Set.member nodeId model.selectedNodes then
-                            Set.remove nodeId model.selectedNodes
+        _ ->
+            model
 
-                        else
-                            Set.insert nodeId model.selectedNodes
-                }
 
-              else if Set.member "Alt" model.pressedKeys then
-                let
-                    ( newFlowGraph, idsOfDuplicatedNodes ) =
-                        if Set.member nodeId model.selectedNodes then
-                            model.flowGraph |> FlowGraph.duplicateSubgraph model.selectedNodes
-
-                        else
-                            model.flowGraph |> FlowGraph.duplicateSubgraph (Set.singleton nodeId)
-                in
-                { model
-                    | flowGraph = newFlowGraph
-                    , selectedNodes = Set.fromList idsOfDuplicatedNodes
-                    , state =
-                        DraggingNodes
-                            { mousePositionAtDragStart = model.svgMousePosition
-                            , nodePositionsAtStart =
-                                idsOfDuplicatedNodes
-                                    |> List.map
-                                        (\nodeId_ ->
-                                            newFlowGraph
-                                                |> Dict.get nodeId_
-                                                |> Maybe.map .position
-                                                |> Maybe.withDefault { x = 0, y = 0 }
-                                                |> (\position -> ( nodeId_, position ))
-                                        )
-                            }
-                }
-
-              else
-                model
-            , Cmd.none
-            )
-
+brushSelectionRectangle : Msg -> Model -> Model
+brushSelectionRectangle msg model =
+    case msg of
         MouseMove newMousePosition ->
-            ( { model
-                | mousePosition = newMousePosition
-                , svgMousePosition =
-                    { x = toFloat newMousePosition.x
-                    , y = toFloat newMousePosition.y
-                    }
-                        |> Geometry.scaleAbout { x = 0, y = 0 } (1 / model.zoom)
-                        |> Geometry.translateBy ( model.pan.x, model.pan.y )
-                , selectedNodes =
+            { model
+                | selectedNodes =
                     case model.state of
                         BrushingSelectionRectangle { mousePositionAtBrushStart } ->
                             model.flowGraph
@@ -293,7 +356,100 @@ update msg model =
 
                         _ ->
                             model.selectedNodes
-                , flowGraph =
+            }
+
+        _ ->
+            model
+
+
+addNodeToSelectionOrRemoveNodeFromSelection : Msg -> Model -> Model
+addNodeToSelectionOrRemoveNodeFromSelection msg model =
+    case ( msg, Set.member "Shift" model.pressedKeys ) of
+        ( MouseDownOnNode nodeId, True ) ->
+            { model
+                | selectedNodes =
+                    if Set.member nodeId model.selectedNodes then
+                        Set.remove nodeId model.selectedNodes
+
+                    else
+                        Set.insert nodeId model.selectedNodes
+            }
+
+        _ ->
+            model
+
+
+startCopyDraggingSelectedNodes : Msg -> Model -> Model
+startCopyDraggingSelectedNodes msg model =
+    case ( msg, Set.member "Alt" model.pressedKeys ) of
+        ( MouseDownOnNode nodeId, True ) ->
+            let
+                ( newFlowGraph, idsOfDuplicatedNodes ) =
+                    if Set.member nodeId model.selectedNodes then
+                        model.flowGraph |> FlowGraph.duplicateSubgraph model.selectedNodes
+
+                    else
+                        model.flowGraph |> FlowGraph.duplicateSubgraph (Set.singleton nodeId)
+            in
+            { model
+                | flowGraph = newFlowGraph
+                , selectedNodes = Set.fromList idsOfDuplicatedNodes
+                , state =
+                    DraggingNodes
+                        { mousePositionAtDragStart = model.svgMousePosition
+                        , nodePositionsAtStart =
+                            idsOfDuplicatedNodes
+                                |> List.map
+                                    (\nodeId_ ->
+                                        newFlowGraph
+                                            |> Dict.get nodeId_
+                                            |> Maybe.map .position
+                                            |> Maybe.withDefault { x = 0, y = 0 }
+                                            |> (\position -> ( nodeId_, position ))
+                                    )
+                        }
+            }
+
+        _ ->
+            model
+
+
+updateMousePosition : Msg -> Model -> Model
+updateMousePosition msg model =
+    case msg of
+        MouseMove newMousePosition ->
+            { model
+                | mousePosition = newMousePosition
+                , svgMousePosition =
+                    { x = toFloat newMousePosition.x
+                    , y = toFloat newMousePosition.y
+                    }
+                        |> Geometry.scaleAbout { x = 0, y = 0 } (1 / model.zoom)
+                        |> Geometry.translateBy ( model.pan.x, model.pan.y )
+            }
+
+        _ ->
+            model
+
+
+updateOutEdgeCoordinatesWithDataComingFromPort : Msg -> Model -> Model
+updateOutEdgeCoordinatesWithDataComingFromPort msg model =
+    case msg of
+        FromPort_OutEdgeDataForSvgPositioning outEdgeData ->
+            { model
+                | flowGraph = model.flowGraph |> FlowGraph.applyOutEdgeCoordinatesFromPort outEdgeData
+            }
+
+        _ ->
+            model
+
+
+dragNodes : Msg -> Model -> Model
+dragNodes msg model =
+    case msg of
+        MouseMove newMousePosition ->
+            { model
+                | flowGraph =
                     case model.state of
                         DraggingNodes { mousePositionAtDragStart, nodePositionsAtStart } ->
                             model.flowGraph
@@ -309,34 +465,18 @@ update msg model =
 
                         _ ->
                             model.flowGraph
-                , pan =
-                    case model.state of
-                        Panning { mousePositionAtPanStart, panAtStart } ->
-                            let
-                                toPoint : MousePosition -> Point
-                                toPoint pos =
-                                    { x = toFloat pos.x
-                                    , y = toFloat pos.y
-                                    }
+            }
 
-                                delta =
-                                    Geometry.vectorFrom
-                                        (toPoint newMousePosition)
-                                        (toPoint mousePositionAtPanStart)
-                                        |> Geometry.scaleBy (1 / model.zoom)
-                            in
-                            panAtStart |> Geometry.translateBy delta
+        _ ->
+            model
 
-                        _ ->
-                            model.pan
-              }
-            , Cmd.none
-            )
 
+finishDrawingEdge : Msg -> Model -> Model
+finishDrawingEdge msg model =
+    case msg of
         MouseUp ->
-            ( { model
-                | state = Idle
-                , flowGraph =
+            { model
+                | flowGraph =
                     case model.state of
                         DrawingEdge { sourceId } ->
                             case mouseOveredInEdgeJoint model of
@@ -348,16 +488,40 @@ update msg model =
 
                         _ ->
                             model.flowGraph
-              }
-            , Cmd.none
-            )
+            }
 
-        FromPort_OutEdgeDataForSvgPositioning outEdgeData ->
-            ( { model
-                | flowGraph = model.flowGraph |> FlowGraph.applyOutEdgeCoordinatesFromPort outEdgeData
-              }
-            , Cmd.none
-            )
+        _ ->
+            model
+
+
+finishBrushingSelectionRectangle : Msg -> Model -> Model
+finishBrushingSelectionRectangle msg model =
+    case msg of
+        MouseUp ->
+            { model | state = Idle }
+
+        _ ->
+            model
+
+
+finishDraggingNodes : Msg -> Model -> Model
+finishDraggingNodes msg model =
+    case msg of
+        MouseUp ->
+            { model | state = Idle }
+
+        _ ->
+            model
+
+
+finishPanning : Msg -> Model -> Model
+finishPanning msg model =
+    case msg of
+        MouseUp ->
+            { model | state = Idle }
+
+        _ ->
+            model
 
 
 mouseOveredInEdgeJoint : Model -> Maybe NodeId
@@ -369,6 +533,10 @@ mouseOveredInEdgeJoint model =
             )
         |> Dict.keys
         |> List.head
+
+
+
+-- VIEW
 
 
 view : Model -> Html Msg
