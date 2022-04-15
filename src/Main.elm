@@ -144,7 +144,7 @@ update msg model =
         |> finishDraggingNodes msg
         --
         |> startBrushingSelectionRectangle msg
-        |> brushSelectionRectangle msg
+        |> dragBrushSelectionRectangle msg
         |> finishBrushingSelectionRectangle msg
         --
         |> addNodeToSelectionOrRemoveNodeFromSelection msg
@@ -336,8 +336,8 @@ startBrushingSelectionRectangle msg model =
             model
 
 
-brushSelectionRectangle : Msg -> Model -> Model
-brushSelectionRectangle msg model =
+dragBrushSelectionRectangle : Msg -> Model -> Model
+dragBrushSelectionRectangle msg model =
     case msg of
         MouseMove newMousePosition ->
             { model
@@ -476,18 +476,21 @@ finishDrawingEdge msg model =
     case msg of
         MouseUp ->
             { model
-                | flowGraph =
+                | state = Idle
+                , flowGraph =
                     case model.state of
                         DrawingEdge { sourceId } ->
                             case mouseOveredInEdgeJoint model of
                                 Just targetId ->
-                                    model.flowGraph |> FlowGraph.insertEdge sourceId targetId ()
+                                    model.flowGraph
+                                        |> FlowGraph.insertEdge sourceId targetId ()
 
                                 _ ->
                                     model.flowGraph
 
                         _ ->
                             model.flowGraph
+                                |> Debug.log "as"
             }
 
         _ ->
@@ -496,8 +499,8 @@ finishDrawingEdge msg model =
 
 finishBrushingSelectionRectangle : Msg -> Model -> Model
 finishBrushingSelectionRectangle msg model =
-    case msg of
-        MouseUp ->
+    case ( msg, model.state ) of
+        ( MouseUp, BrushingSelectionRectangle _ ) ->
             { model | state = Idle }
 
         _ ->
@@ -506,8 +509,8 @@ finishBrushingSelectionRectangle msg model =
 
 finishDraggingNodes : Msg -> Model -> Model
 finishDraggingNodes msg model =
-    case msg of
-        MouseUp ->
+    case ( msg, model.state ) of
+        ( MouseUp, DraggingNodes _ ) ->
             { model | state = Idle }
 
         _ ->
@@ -516,8 +519,8 @@ finishDraggingNodes msg model =
 
 finishPanning : Msg -> Model -> Model
 finishPanning msg model =
-    case msg of
-        MouseUp ->
+    case ( msg, model.state ) of
+        ( MouseUp, Panning _ ) ->
             { model | state = Idle }
 
         _ ->
