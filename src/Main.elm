@@ -546,9 +546,9 @@ view : Model -> Html Msg
 view model =
     div []
         [ div [ style "position" "absolute", style "margin" "10px" ]
-            [ p [] [ text "Add/remove nodes from selection: `Shift` + click" ]
-            , p [] [ text "Brushing a selection: hold the `s` key down and drag" ]
-            , p [] [ text "Duplicating a selection: hold the `Alt` key down and drage" ]
+            [ p [] [ text "Brushing a selection: hold the `s` key down and drag" ]
+            , p [] [ text "Add/remove nodes from selection: `Shift` + click" ]
+            , p [] [ text "Duplicating a selection: hold the `Alt` key down and drag" ]
             ]
         , div [ style "position" "absolute", style "margin" "10px", style "bottom" "0px" ]
             [ p [] [ text ("`state`: " ++ Debug.toString model.state) ]
