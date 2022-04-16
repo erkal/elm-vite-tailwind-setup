@@ -14,7 +14,7 @@ type alias NodeId =
 
 
 type alias Node =
-    { outEdges : Dict NodeId Float
+    { outEdges : Dict NodeId { offsetTop : Float, offsetLeft : Float }
 
     {- `offsetTop` value for positioning the svg edges -}
     --
@@ -24,11 +24,6 @@ type alias Node =
     }
 
 
-empty : FlowGraph
-empty =
-    Dict.empty
-
-
 exampleGraph : FlowGraph
 exampleGraph =
     let
@@ -36,7 +31,7 @@ exampleGraph =
             ( nodeId
             , { outEdges =
                     edgeTargets
-                        |> List.map (\target -> ( target, 0 ))
+                        |> List.map (\target -> ( target, { offsetTop = 0, offsetLeft = 0 } ))
                         |> Dict.fromList
 
               --
@@ -62,11 +57,11 @@ moveNodes l flowGraph =
             flowGraph
 
 
-insertEdge : NodeId -> NodeId -> e -> FlowGraph -> FlowGraph
-insertEdge sourceId targetId edge flowGraph =
+insertEdge : NodeId -> NodeId -> FlowGraph -> FlowGraph
+insertEdge sourceId targetId flowGraph =
     flowGraph
         |> Dict.update sourceId
-            (Maybe.map (\node -> { node | outEdges = node.outEdges |> Dict.insert targetId e }))
+            (Maybe.map (\node -> { node | outEdges = node.outEdges |> Dict.insert targetId { offsetTop = 0, offsetLeft = 0 } }))
 
 
 boundingBox : Node -> BoundingBox
@@ -133,6 +128,7 @@ type alias OutEdgeDataFromPort =
     List
         { id : String
         , offsetTop : Float
+        , offsetLeft : Float
         }
 
 
@@ -144,14 +140,22 @@ applyOutEdgeCoordinatesFromPort : OutEdgeDataFromPort -> FlowGraph -> FlowGraph
 applyOutEdgeCoordinatesFromPort outEdgeDataFromPort flowGraph =
     outEdgeDataFromPort
         |> List.foldl
-            (\{ id, offsetTop } acc ->
+            (\{ id, offsetTop, offsetLeft } acc ->
                 let
                     nodeId =
                         id |> String.toInt |> Maybe.withDefault 0
                 in
                 acc
                     |> Dict.update nodeId
-                        (Maybe.map (\node -> { node | outEdges = node.outEdges |> Dict.map (\_ _ -> offsetTop) }))
+                        (Maybe.map
+                            (\node ->
+                                { node
+                                    | outEdges =
+                                        node.outEdges
+                                            |> Dict.map (\_ e -> { e | offsetTop = offsetTop, offsetLeft = offsetLeft })
+                                }
+                            )
+                        )
             )
             flowGraph
 
@@ -160,8 +164,8 @@ outEdgeJointCoordinatesForSVGDrawing : Node -> Point
 outEdgeJointCoordinatesForSVGDrawing node =
     node.position
         |> Geometry.translateBy
-            ( node.width
-            , 16 + (node.outEdges |> Dict.values |> List.head |> Maybe.withDefault 0)
+            ( node.outEdges |> Dict.values |> List.head |> Maybe.map .offsetLeft |> Maybe.withDefault 0
+            , node.outEdges |> Dict.values |> List.head |> Maybe.map .offsetTop |> Maybe.withDefault 0
             )
 
 

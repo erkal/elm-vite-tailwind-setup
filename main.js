@@ -7,7 +7,7 @@ const app = Elm.Main.init({ node: root });
 function sendEdgeDataToElmApp() {
   app.ports.outEdgeCircleCoordinatesForSvgPositioning.send(
     Array.from(document.getElementsByClassName("out-edge-circle")).map((el) => {
-      return { id: el.id, offsetTop: el.offsetTop };
+      return { id: el.id, offsetTop: el.offsetTop, offsetLeft: el.offsetLeft };
     })
   );
 }

@@ -483,7 +483,7 @@ finishDrawingEdge msg model =
                             case mouseOveredInEdgeJoint model of
                                 Just targetId ->
                                     model.flowGraph
-                                        |> FlowGraph.insertEdge sourceId targetId ()
+                                        |> FlowGraph.insertEdge sourceId targetId
 
                                 _ ->
                                     model.flowGraph
@@ -657,16 +657,6 @@ viewNodeHtml model nodeId node =
                 ]
                 []
 
-        circleWithLine =
-            g
-                [ transform "translate(8,16)"
-                , onMouseDown (MouseDownOnOutEdgeJoint nodeId)
-                ]
-                [ line [ x1 "0", y1 "0", x2 "8", y2 "0", strokeWidth "1", stroke Colors.edgeBlue ] []
-                , circle [ rx "5", ry "5", r "5", fill Colors.edgeBlue, cursor "pointer" ] []
-                , circle [ rx "5", ry "5", r "4.5", fill "none", strokeWidth "1", stroke "rgba(0, 0, 0, 0.2)" ] []
-                ]
-
         edgeJoint =
             if Dict.isEmpty node.outEdges then
                 div [] []
@@ -677,19 +667,19 @@ viewNodeHtml model nodeId node =
                     , class "out-edge-circle"
                     , style "position" "absolute"
                     , style "top" "50px"
-                    , style "left" "224px"
-                    , style "width" "16px"
-                    , style "height" "32px"
-                    , style "background-color" Colors.backgroundGray
+                    , style "left" "232px"
+
+                    --, style "background-color" "rgb(255,0,0)"
+                    --
+                    , style "width" "10px"
+                    , style "height" "10px"
+                    , style "transform" "translate(-5px,-5px)"
+
+                    --
+                    , style "cursor" "pointer"
+                    , onMouseDown (MouseDownOnOutEdgeJoint nodeId)
                     ]
-                    [ svg
-                        [ width "16px"
-                        , height "32px"
-                        ]
-                        [ edgJointBackground
-                        , circleWithLine
-                        ]
-                    ]
+                    []
     in
     div
         [ style "position" "absolute"
@@ -748,9 +738,7 @@ svgCanvas model =
         [ defs [] [ markerForArrowHead ]
         , viewBackgroundSvgRectangleForMouseInteraction model
         , viewSelectionRectangle model
-
-        --, circle [ cx "200", cy "300", r "10", fill "steelblue" ] []
-        , g [] (model.flowGraph |> Dict.map (viewNodeSvg model) |> Dict.values)
+        , viewNodeSvgs model
         , viewDraggedEdge model
         ]
 
@@ -818,7 +806,7 @@ viewDraggedEdge model =
             Dict.get sourceId model.flowGraph
                 |> Maybe.map
                     (\node ->
-                        viewEdgeSvg (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) model.svgMousePosition
+                        viewEdgeSvg sourceId (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) model.svgMousePosition
                     )
                 |> Maybe.withDefault (g [] [])
 
@@ -826,8 +814,8 @@ viewDraggedEdge model =
             g [] []
 
 
-viewEdgeSvg : Point -> Point -> Svg Msg
-viewEdgeSvg startPoint endPoint =
+viewEdgeSvg : NodeId -> Point -> Point -> Svg Msg
+viewEdgeSvg nodeId startPoint endPoint =
     let
         dxdy =
             endPoint
@@ -841,23 +829,23 @@ viewEdgeSvg startPoint endPoint =
 
         dx1dy1 =
             if startPoint.x < endPoint.x then
-                { x = edgeBending * dxdy.x
+                { x = edgeBending * dxdy.x |> max 70
                 , y = 0
                 }
 
             else
-                { x = -backEdgeBending * dxdy.x
+                { x = -backEdgeBending * dxdy.x |> max 70
                 , y = 0
                 }
 
         dx2dy2 =
             if startPoint.x < endPoint.x then
-                { x = dxdy.x - edgeBending * dxdy.x
+                { x = dxdy.x - (edgeBending * dxdy.x |> max 70)
                 , y = dxdy.y
                 }
 
             else
-                { x = dxdy.x + backEdgeBending * dxdy.x
+                { x = dxdy.x + (backEdgeBending * dxdy.x |> min -70)
                 , y = dxdy.y
                 }
 
@@ -881,8 +869,23 @@ viewEdgeSvg startPoint endPoint =
                 , markerEnd "url(#arrowhead)"
                 ]
                 []
+
+        outEdgeCircle =
+            g
+                [ style "transform" ("translate(" ++ String.fromFloat startPoint.x ++ "px," ++ String.fromFloat startPoint.y ++ "px)")
+                ]
+                [ circle [ rx "5", ry "5", r "5", fill Colors.edgeBlue ] []
+                , circle [ rx "5", ry "5", r "4.5", fill "none", strokeWidth "1", stroke "rgba(0, 0, 0, 0.2)" ] []
+                ]
     in
-    curvedLine
+    g []
+        [ outEdgeCircle
+        , curvedLine
+        ]
+
+
+viewNodeSvgs model =
+    g [] (model.flowGraph |> Dict.map (viewNodeSvg model) |> Dict.values)
 
 
 viewNodeSvg : Model -> NodeId -> Node -> Svg Msg
@@ -896,6 +899,11 @@ viewNodeSvg model nodeId node =
                         |> Maybe.map FlowGraph.inEdgeJointCoordinatesForSVGDrawing
                         |> Maybe.withDefault { x = 0, y = 0 }
             in
-            viewEdgeSvg (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) endPoint
+            viewEdgeSvg nodeId (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) endPoint
+
+        viewOutEdges =
+            g [] (node.outEdges |> Dict.map viewEdge |> Dict.values)
     in
-    g [] (node.outEdges |> Dict.map viewEdge |> Dict.values)
+    g []
+        [ viewOutEdges
+        ]
