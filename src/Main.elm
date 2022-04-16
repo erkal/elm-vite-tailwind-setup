@@ -666,7 +666,7 @@ viewNodeHtml model nodeId node =
                     [ id (String.fromInt nodeId)
                     , class "out-edge-circle"
                     , style "position" "absolute"
-                    , style "top" "50px"
+                    , style "top" "120px"
                     , style "left" "232px"
 
                     --, style "background-color" "rgb(255,0,0)"
