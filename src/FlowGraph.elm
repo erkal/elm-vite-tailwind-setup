@@ -14,14 +14,33 @@ type alias NodeId =
 
 
 type alias Node =
-    { outEdges : Dict NodeId { offsetTop : Float, offsetLeft : Float }
-
-    {- `offsetTop` value for positioning the svg edges -}
-    --
-    , position : Point
+    { position : Point
     , width : Float
     , height : Float
+    , outEdges : List Edge
     }
+
+
+type alias Edge =
+    { edgeType : EdgeType
+    , target : NodeId
+    , offsetTop : Float
+    , offsetLeft : Float
+    }
+
+
+type EdgeType
+    = Start
+    | Basic
+    | Intent_Match
+    | Intent_NoMatch
+    | Wait_UserInput
+    | Wait_Timeout
+    | SplitBy_Condition {- TODO: Type for Condition -}
+    | SplitBy_Percentage Float
+    | Choice String
+    | Action_Success
+    | Action_Failure
 
 
 exampleGraph : FlowGraph
@@ -29,15 +48,19 @@ exampleGraph =
     let
         makeNode pos nodeId edgeTargets =
             ( nodeId
-            , { outEdges =
-                    edgeTargets
-                        |> List.map (\target -> ( target, { offsetTop = 0, offsetLeft = 0 } ))
-                        |> Dict.fromList
-
-              --
-              , position = pos
+            , { position = pos
               , width = 240
               , height = 160
+              , outEdges =
+                    edgeTargets
+                        |> List.map
+                            (\target ->
+                                { edgeType = Basic
+                                , target = target
+                                , offsetTop = 0
+                                , offsetLeft = 0
+                                }
+                            )
               }
             )
     in
@@ -61,7 +84,19 @@ insertEdge : NodeId -> NodeId -> FlowGraph -> FlowGraph
 insertEdge sourceId targetId flowGraph =
     flowGraph
         |> Dict.update sourceId
-            (Maybe.map (\node -> { node | outEdges = node.outEdges |> Dict.insert targetId { offsetTop = 0, offsetLeft = 0 } }))
+            (Maybe.map
+                (\node ->
+                    { node
+                        | outEdges =
+                            { edgeType = Basic
+                            , target = targetId
+                            , offsetTop = 0
+                            , offsetLeft = 0
+                            }
+                                :: node.outEdges
+                    }
+                )
+            )
 
 
 boundingBox : Node -> BoundingBox
@@ -77,7 +112,7 @@ inducedSubgraph : Set NodeId -> FlowGraph -> FlowGraph
 inducedSubgraph nodeIds flowGraph =
     flowGraph
         |> Dict.filter (\nodeId _ -> Set.member nodeId nodeIds)
-        |> Dict.map (\_ node -> { node | outEdges = node.outEdges |> Dict.filter (\nodeId _ -> Set.member nodeId nodeIds) })
+        |> Dict.map (\_ node -> { node | outEdges = node.outEdges |> List.filter (\{ target } -> Set.member target nodeIds) })
 
 
 duplicateSubgraph : Set NodeId -> FlowGraph -> ( FlowGraph, List NodeId )
@@ -107,14 +142,7 @@ duplicateSubgraph nodeIds flowGraph =
                         { node
                             | outEdges =
                                 node.outEdges
-                                    |> Dict.toList
-                                    |> List.map
-                                        (\( nodeId_, y ) ->
-                                            ( Dict.get nodeId_ newNodeIds |> Maybe.withDefault 0
-                                            , y
-                                            )
-                                        )
-                                    |> Dict.fromList
+                                    |> List.map (\edge -> { edge | target = Dict.get edge.target newNodeIds |> Maybe.withDefault 0 })
                         }
                     )
                 )
@@ -144,18 +172,14 @@ applyOutEdgeCoordinatesFromPort outEdgeDataFromPort flowGraph =
                 let
                     nodeId =
                         id |> String.toInt |> Maybe.withDefault 0
+
+                    updateEdge edge =
+                        { edge | offsetTop = offsetTop, offsetLeft = offsetLeft }
+
+                    updateNode node =
+                        { node | outEdges = node.outEdges |> List.map updateEdge }
                 in
-                acc
-                    |> Dict.update nodeId
-                        (Maybe.map
-                            (\node ->
-                                { node
-                                    | outEdges =
-                                        node.outEdges
-                                            |> Dict.map (\_ e -> { e | offsetTop = offsetTop, offsetLeft = offsetLeft })
-                                }
-                            )
-                        )
+                acc |> Dict.update nodeId (Maybe.map updateNode)
             )
             flowGraph
 
@@ -164,8 +188,8 @@ outEdgeJointCoordinatesForSVGDrawing : Node -> Point
 outEdgeJointCoordinatesForSVGDrawing node =
     node.position
         |> Geometry.translateBy
-            ( node.outEdges |> Dict.values |> List.head |> Maybe.map .offsetLeft |> Maybe.withDefault 0
-            , node.outEdges |> Dict.values |> List.head |> Maybe.map .offsetTop |> Maybe.withDefault 0
+            ( node.outEdges |> List.head |> Maybe.map .offsetLeft |> Maybe.withDefault 0
+            , node.outEdges |> List.head |> Maybe.map .offsetTop |> Maybe.withDefault 0
             )
 
 

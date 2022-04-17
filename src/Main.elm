@@ -631,34 +631,8 @@ viewNodeHtml model nodeId node =
                     [ text "Basic" ]
                 ]
 
-        edgJointBackground =
-            path
-                [ d
-                    (String.concat
-                        [ "M -1 -1"
-                        , "L 15.5 -1"
-                        , "L 15.5 0"
-                        , "A 8 8 90 0 1 8 8"
-                        , "A 8 8 90 0 0 1 16"
-                        , "A 8 8 90 0 0 8 24"
-                        , "A 8 8 90 0 1 15.5 32.5"
-                        , "L 15.5 33"
-                        , "L -1 33"
-                        ]
-                    )
-                , fill Colors.nodeBackgroundWhite
-                , stroke Colors.selectionRectangleBorderBlue
-                , strokeWidth <|
-                    if Set.member nodeId model.selectedNodes then
-                        Colors.selectedNodeBorder ++ "1"
-
-                    else
-                        "0"
-                ]
-                []
-
-        edgeJoint =
-            if Dict.isEmpty node.outEdges then
+        edgeJoint_invisible =
+            if List.isEmpty node.outEdges then
                 div [] []
 
             else
@@ -701,7 +675,7 @@ viewNodeHtml model nodeId node =
         --, style "box-shadow" "rgba(0, 0, 0, 0.24) 0px 3px 8px"
         ]
         [ topBar
-        , edgeJoint
+        , edgeJoint_invisible
         ]
 
 
@@ -738,7 +712,8 @@ svgCanvas model =
         [ defs [] [ markerForArrowHead ]
         , viewBackgroundSvgRectangleForMouseInteraction model
         , viewSelectionRectangle model
-        , viewNodeSvgs model
+        , viewEdges model
+        , viewNodeBackgrounds model
         , viewDraggedEdge model
         ]
 
@@ -806,7 +781,7 @@ viewDraggedEdge model =
             Dict.get sourceId model.flowGraph
                 |> Maybe.map
                     (\node ->
-                        viewEdgeSvg sourceId (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) model.svgMousePosition
+                        viewEdgeSvg (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) model.svgMousePosition
                     )
                 |> Maybe.withDefault (g [] [])
 
@@ -814,8 +789,8 @@ viewDraggedEdge model =
             g [] []
 
 
-viewEdgeSvg : NodeId -> Point -> Point -> Svg Msg
-viewEdgeSvg nodeId startPoint endPoint =
+viewEdgeSvg : Point -> Point -> Svg Msg
+viewEdgeSvg startPoint endPoint =
     let
         dxdy =
             endPoint
@@ -884,14 +859,20 @@ viewEdgeSvg nodeId startPoint endPoint =
         ]
 
 
-viewNodeSvgs model =
-    g [] (model.flowGraph |> Dict.map (viewNodeSvg model) |> Dict.values)
+viewEdges : Model -> Svg Msg
+viewEdges model =
+    g [] (model.flowGraph |> Dict.map (viewOutEdgesOfNode model) |> Dict.values)
 
 
-viewNodeSvg : Model -> NodeId -> Node -> Svg Msg
-viewNodeSvg model nodeId node =
+viewNodeBackgrounds : Model -> Svg Msg
+viewNodeBackgrounds model =
+    g [] (model.flowGraph |> Dict.map (viewNodeBackgroundWithCurvedBorder model) |> Dict.values)
+
+
+viewOutEdgesOfNode : Model -> NodeId -> Node -> Svg Msg
+viewOutEdgesOfNode model nodeId node =
     let
-        viewEdge target _ =
+        viewEdge { target } =
             let
                 endPoint =
                     model.flowGraph
@@ -899,11 +880,61 @@ viewNodeSvg model nodeId node =
                         |> Maybe.map FlowGraph.inEdgeJointCoordinatesForSVGDrawing
                         |> Maybe.withDefault { x = 0, y = 0 }
             in
-            viewEdgeSvg nodeId (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) endPoint
-
-        viewOutEdges =
-            g [] (node.outEdges |> Dict.map viewEdge |> Dict.values)
+            viewEdgeSvg (FlowGraph.outEdgeJointCoordinatesForSVGDrawing node) endPoint
     in
-    g []
-        [ viewOutEdges
+    g [] (node.outEdges |> List.map viewEdge)
+
+
+viewNodeBackgroundWithCurvedBorder : Model -> NodeId -> Node -> Svg Msg
+viewNodeBackgroundWithCurvedBorder model nodeId node =
+    let
+        outEdgeJointCoordinates =
+            FlowGraph.outEdgeJointCoordinatesForSVGDrawing node
+
+        edgJointBackground =
+            path
+                [ d
+                    (String.concat
+                        [ "M -1 -1"
+                        , "L 15.5 -1"
+                        , "L 15.5 0"
+                        , "A 8 8 90 0 1 8 8"
+                        , "A 8 8 90 0 0 1 16"
+                        , "A 8 8 90 0 0 8 24"
+                        , "A 8 8 90 0 1 15.5 32.5"
+                        , "L 15.5 33"
+                        , "L -1 33"
+                        ]
+                    )
+                , fill Colors.nodeBackgroundWhite
+                , stroke Colors.selectionRectangleBorderBlue
+                , strokeWidth <|
+                    if Set.member nodeId model.selectedNodes then
+                        Colors.selectedNodeBorder ++ "1"
+
+                    else
+                        "0"
+                ]
+                []
+    in
+    path
+        [ d
+            (String.concat
+                [--, "a 8 8 90 0 1 8 8"
+                 --, "a 8 8 90 0 0 1 16"
+                 --, "a 8 8 90 0 0 8 24"
+                 --, "a 8 8 90 0 1 16 32"
+                ]
+            )
+
+        --, fill Colors.nodeBackgroundWhite
+        , fill Colors.edgeBlue
+        , stroke Colors.selectionRectangleBorderBlue
+        , strokeWidth <|
+            if Set.member nodeId model.selectedNodes then
+                Colors.selectedNodeBorder ++ "1"
+
+            else
+                "0"
         ]
+        []
