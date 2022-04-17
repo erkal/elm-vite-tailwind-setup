@@ -65,10 +65,10 @@ exampleGraph =
             )
     in
     Dict.fromList
-        [ makeNode { x = 100, y = 100 } 0 [ 1, 2 ]
+        [ makeNode { x = 100, y = 100 } 0 [ 1 ]
         , makeNode { x = 500, y = 400 } 1 [ 2 ]
-        , makeNode { x = 800, y = 300 } 2 []
-        , makeNode { x = 1000, y = 100 } 3 []
+        , makeNode { x = 800, y = 300 } 2 [ 3 ]
+        , makeNode { x = 1000, y = 100 } 3 [ 1 ]
         ]
 
 
@@ -182,17 +182,3 @@ applyOutEdgeCoordinatesFromPort outEdgeDataFromPort flowGraph =
                 acc |> Dict.update nodeId (Maybe.map updateNode)
             )
             flowGraph
-
-
-outEdgeJointCoordinatesForSVGDrawing : Node -> Point
-outEdgeJointCoordinatesForSVGDrawing node =
-    node.position
-        |> Geometry.translateBy
-            ( node.outEdges |> List.head |> Maybe.map .offsetLeft |> Maybe.withDefault 0
-            , node.outEdges |> List.head |> Maybe.map .offsetTop |> Maybe.withDefault 0
-            )
-
-
-inEdgeJointCoordinatesForSVGDrawing : Node -> Point
-inEdgeJointCoordinatesForSVGDrawing node =
-    node.position |> Geometry.translateBy ( 0, 16 )
